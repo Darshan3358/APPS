@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: gigdial-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: MONGO_URI
+        value: mongodb+srv://zarwebcoders:zarwebcoders@cluster0.lqgakzj.mongodb.net/gigdialapp
+      - key: JWT_SECRET
+        value: gigdial_secret_key_12345
+      - key: PORT
+        value: 5001
