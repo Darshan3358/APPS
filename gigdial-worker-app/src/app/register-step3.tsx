@@ -99,12 +99,14 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.8,
+          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
-          setAadhaarUri(asset.uri);
+          const uriToUse = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+          setAadhaarUri(uriToUse);
           setAadhaarFile({
-            uri: asset.uri,
+            uri: uriToUse,
             name: asset.uri.split('/').pop() || 'aadhaar.jpg',
             type: asset.mimeType || 'image/jpeg'
           });
@@ -138,12 +140,14 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.8,
+          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
-          setPanUri(asset.uri);
+          const uriToUse = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+          setPanUri(uriToUse);
           setPanFile({
-            uri: asset.uri,
+            uri: uriToUse,
             name: asset.uri.split('/').pop() || 'pan.jpg',
             type: asset.mimeType || 'image/jpeg'
           });

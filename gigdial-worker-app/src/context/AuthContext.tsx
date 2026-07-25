@@ -230,17 +230,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (panFileWeb) formData.append('panCard', panFileWeb);
       } else {
         if (aadhaarUri) {
+          const fileUri = aadhaarUri.startsWith('file://') || aadhaarUri.startsWith('data:') || aadhaarUri.startsWith('content:') 
+            ? aadhaarUri 
+            : `file://${aadhaarUri}`;
           const aadhaarName = aadhaarUri.split('/').pop() || 'aadhaar.jpg';
           formData.append('aadhaarCard', {
-            uri: aadhaarUri.replace('file://', ''),
+            uri: fileUri,
             name: aadhaarName,
             type: 'image/jpeg'
           } as any);
         }
         if (panUri) {
+          const fileUri = panUri.startsWith('file://') || panUri.startsWith('data:') || panUri.startsWith('content:') 
+            ? panUri 
+            : `file://${panUri}`;
           const panName = panUri.split('/').pop() || 'pan.jpg';
           formData.append('panCard', {
-            uri: panUri.replace('file://', ''),
+            uri: fileUri,
             name: panName,
             type: 'image/jpeg'
           } as any);
