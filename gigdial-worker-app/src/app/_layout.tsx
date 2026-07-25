@@ -104,12 +104,16 @@ function AppContent() {
     socket.on('new_lead', (lead) => {
       console.log('⚡ New Lead socket event:', lead);
       
-      // Filter by category to match worker categories
-      if (workerCategory) {
-        if (!categoryMatchesLead(workerCategory, lead.title, lead.description)) {
-          console.log('Lead category does not match worker categories:', workerCategory);
-          return;
-        }
+      const isTargetedWorker = lead.workerId && (
+        String(lead.workerId) === String(userId) || 
+        String(lead.workerId) === String(user?.id) || 
+        String(lead.workerId) === String((user as any)?._id)
+      );
+      const matchesCategory = !workerCategory || categoryMatchesLead(workerCategory, lead.title, lead.description);
+
+      if (!isTargetedWorker && !matchesCategory) {
+        console.log('Lead is not for this worker');
+        return;
       }
 
       // Format date and time

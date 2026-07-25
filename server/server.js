@@ -3582,29 +3582,79 @@ app.get('/api/workers/top-rated', async (req, res) => {
   }
 });
 
-// GET /api/workers
+// GET /api/workers - Fetch all workers for Customer App with real online status
 app.get('/api/workers', async (req, res) => {
   try {
-    const { service, sort } = req.query;
-    const filter = { isActive: true };
-    if (service) {
-      filter.$or = [
-        { profession: { $regex: service, $options: 'i' } },
-        { skills: { $in: [service] } }
-      ];
+    const { service, search, sort } = req.query;
+
+    const userWorkers = await db.collection('users').find({
+      $or: [{ role: 'worker' }, { isProvider: true }]
+    }).toArray();
+
+    const dbWorkers = await db.collection('workers').find({}).toArray();
+
+    const seenIds = new Set();
+    const result = [];
+
+    // Add from users collection
+    for (const u of userWorkers) {
+      const idStr = u._id.toString();
+      seenIds.add(idStr);
+      if (u.uid) seenIds.add(u.uid);
+
+      const wDoc = dbWorkers.find(w => w.uid === idStr || (w._id && w._id.toString() === idStr) || (w.email && w.email === u.email));
+
+      const isOnlineVal = u.isOnline !== false && u.isOnline !== 'false' && (wDoc ? (wDoc.isOnline !== false && wDoc.isOnline !== 'false') : true);
+
+      result.push({
+        _id: u._id,
+        uid: u.uid || idStr,
+        id: u._id.toString(),
+        name: u.name,
+        profession: u.mainCategory || u.category || u.profession || 'Electrician',
+        category: u.mainCategory || u.category || 'Electrician',
+        isOnline: isOnlineVal,
+        isApproved: u.isApproved !== false,
+        phone: u.phone,
+        city: u.city || 'Ahmedabad',
+        email: u.email,
+        rating: u.rating || 4.9,
+        reviewsCount: 12,
+        experienceYears: u.experience || 5,
+        avatar: u.profilePhoto || u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        image: u.profilePhoto || u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        profileViews: u.profileViews || (wDoc ? wDoc.profileViews : 12) || 12
+      });
     }
 
-    let sortOptions = {};
-    if (sort === 'top') {
-      sortOptions = { rating: -1 };
-    } else if (sort === 'experience') {
-      sortOptions = { experience: -1 };
-    } else {
-      sortOptions = { rating: -1 };
+    // Add remaining from workers collection
+    for (const w of dbWorkers) {
+      const idStr = w._id.toString();
+      const uidStr = w.uid || '';
+      if (!seenIds.has(idStr) && (!uidStr || !seenIds.has(uidStr))) {
+        result.push({
+          _id: w._id,
+          uid: w.uid || idStr,
+          id: w._id.toString(),
+          name: w.name,
+          profession: w.mainCategory || w.category || w.profession || 'Service Provider',
+          category: w.mainCategory || w.category || 'Service Provider',
+          isOnline: w.isOnline !== false && w.isOnline !== 'false',
+          isApproved: w.isApproved !== false,
+          phone: w.phone,
+          city: w.city || 'Ahmedabad',
+          email: w.email,
+          rating: w.rating || 4.9,
+          reviewsCount: 12,
+          experienceYears: w.experience || 5,
+          avatar: w.image || w.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          image: w.image || w.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          profileViews: w.profileViews || 12
+        });
+      }
     }
 
-    const list = await db.collection('workers').find(filter).sort(sortOptions).toArray();
-    res.json(list);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3614,18 +3664,27 @@ app.get('/api/workers', async (req, res) => {
 app.get('/api/workers/:workerId', async (req, res) => {
   try {
     const { workerId } = req.params;
-    let query = { uid: workerId };
+    let query = { $or: [{ uid: workerId }, { email: workerId }] };
     if (ObjectId.isValid(workerId)) {
-      query = { $or: [{ _id: new ObjectId(workerId) }, { uid: workerId }] };
+      query.$or.push({ _id: new ObjectId(workerId) });
     }
-    const worker = await db.collection('workers').findOne(query);
-    if (!worker) return res.status(404).json({ error: "Worker not found" });
 
-    // Increment profile views
-    await db.collection('workers').updateOne(query, { $inc: { profileViews: 1 } });
-    worker.profileViews = (worker.profileViews || 0) + 1;
+    const userDoc = await db.collection('users').findOne(query);
+    const workerDoc = await db.collection('workers').findOne(query);
 
-    res.json(worker);
+    if (!userDoc && !workerDoc) return res.status(404).json({ error: "Worker not found" });
+
+    // Increment profile views in both users and workers collections
+    await db.collection('users').updateMany(query, { $inc: { profileViews: 1 } });
+    await db.collection('workers').updateMany(query, { $inc: { profileViews: 1 } });
+
+    const merged = {
+      ...(workerDoc || {}),
+      ...(userDoc || {}),
+      profileViews: ((userDoc ? userDoc.profileViews : 0) || (workerDoc ? workerDoc.profileViews : 0) || 12) + 1
+    };
+
+    res.json(merged);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
