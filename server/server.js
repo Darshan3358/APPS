@@ -3997,9 +3997,13 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
       });
     };
 
-    const matchingPendingLeads = allPendingBookings.filter(b => 
-      b.workerId === uid || categoryMatchesLead(workerCategory, b.title, b.description)
-    );
+    const matchingPendingLeads = allPendingBookings.filter(b => {
+      const bWorkerIdStr = b.workerId ? String(b.workerId) : '';
+      const uidStr = String(uid);
+      const isDirectMatch = bWorkerIdStr === uidStr || 
+        (ObjectId.isValid(bWorkerIdStr) && ObjectId.isValid(uidStr) && bWorkerIdStr === uidStr);
+      return isDirectMatch || categoryMatchesLead(workerCategory, b.title, b.description);
+    });
 
     const todayLeadsCount = matchingPendingLeads.length;
 
@@ -4007,6 +4011,7 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
     const completedBookings = await db.collection('bookings').find({
       $or: [
         { workerId: uid },
+        { workerId: String(uid) },
         { workerId: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
         { workerPhone: workerDoc ? workerDoc.phone : '' },
         { workerEmail: workerDoc ? workerDoc.email : '' }
@@ -4015,7 +4020,7 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
     }).toArray();
 
     // 3. Profile Views & Rating
-    const profileViews = (workerDoc && workerDoc.profileViews !== undefined && workerDoc.profileViews !== 0) ? workerDoc.profileViews : 15;
+    const profileViews = (workerDoc && (workerDoc.profileViews || workerDoc.views)) ? (workerDoc.profileViews || workerDoc.views) : 12;
     
     let rating = 5.0;
     if (workerDoc) {
