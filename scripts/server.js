@@ -4080,8 +4080,8 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
   }
 });
 
-// PUT /api/worker/:uid/online-status - Update worker online status in database
-app.put('/api/worker/:uid/online-status', async (req, res) => {
+// PUT & POST /api/worker/:uid/online-status & /api/workers/:uid/online-status - Update worker online status in database
+const handleOnlineStatus = async (req, res) => {
   try {
     const { uid } = req.params;
     const { isOnline } = req.body;
@@ -4110,11 +4110,11 @@ app.put('/api/worker/:uid/online-status', async (req, res) => {
         $or: [
           { uid: uid },
           { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-          ...(userEmail ? [{ email: userEmail }] : []),
-          ...(userPhone ? [{ phone: userPhone }] : [])
+          { email: userEmail },
+          { phone: userPhone }
         ] 
       },
-      { $set: { isOnline: onlineVal } }
+      { $set: { isOnline: onlineVal, updatedAt: new Date() } }
     );
 
     // Update in workers collection
@@ -4123,20 +4123,26 @@ app.put('/api/worker/:uid/online-status', async (req, res) => {
         $or: [
           { uid: uid },
           { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-          ...(targetUser?.uid ? [{ uid: targetUser.uid }] : []),
-          ...(userName ? [{ name: userName }] : []),
-          ...(userEmail ? [{ email: userEmail }] : []),
-          ...(userPhone ? [{ phone: userPhone }] : [])
+          { email: userEmail },
+          { phone: userPhone }
         ] 
       },
-      { $set: { isOnline: onlineVal } }
+      { $set: { isOnline: onlineVal, updatedAt: new Date() } }
     );
 
-    res.json({ success: true, isOnline: onlineVal });
+    // Emit real-time socket event for online status update
+    io.emit('worker_status_change', { uid, isOnline: onlineVal });
+
+    res.json({ success: true, isOnline: onlineVal, message: `Worker online status updated to ${onlineVal}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+};
+
+app.put('/api/worker/:uid/online-status', handleOnlineStatus);
+app.put('/api/workers/:uid/online-status', handleOnlineStatus);
+app.post('/api/worker/:uid/online-status', handleOnlineStatus);
+app.post('/api/workers/:uid/online-status', handleOnlineStatus);
 
 // GET /api/worker/:uid/subscription - status check
 app.get('/api/worker/:uid/subscription', async (req, res) => {
