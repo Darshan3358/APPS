@@ -3782,54 +3782,18 @@ app.post('/api/reviews/create', async (req, res) => {
 app.get('/api/workers/dashboard/:uid', async (req, res) => {
   try {
     const { uid } = req.params;
-    const worker = await db.collection('workers').findOne({ uid });
-    if (!worker) return res.status(404).json({ error: "Worker not found" });
-
-    // Check and lazy-deactivate expired subscription
-    let subscriptionObj = worker.subscription || { plan: 'none', status: 'inactive', active: false };
-    if (subscriptionObj.status === 'active' || subscriptionObj.active) {
-      if (subscriptionObj.expiryDate) {
-        const expiry = new Date(subscriptionObj.expiryDate);
-        if (expiry < new Date()) {
-          subscriptionObj = {
-            plan: 'none',
-            status: 'inactive',
-            active: false,
-            expiryDate: subscriptionObj.expiryDate
-          };
-          await db.collection('workers').updateOne(
-            { uid },
-            { $set: { subscription: subscriptionObj, updatedAt: new Date() } }
-          );
-          await db.collection('users').updateOne(
-            { uid },
-            { $set: { 
-              'subscription.isActive': false, 
-              'subscription.remainingDays': 0,
-              updatedAt: new Date() 
-            } }
-          );
-        }
-      }
-    }
-
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-    const bookings = await db.collection('bookings').find({ workerId: uid }).toArray();
-    const totalLeads = bookings.length;
-    const todayLeads = bookings.filter(b => b.createdAt >= today).length;
-    const monthLeads = bookings.filter(b => b.createdAt >= monthStart).length;
-
-    res.json({
-      todayLeads,
-      monthLeads,
-      profileViews: worker.profileViews || 0,
-      totalLeads,
-      recentLeads: bookings.slice(0, 5),
-      subscription: subscriptionObj
+    const statsUrl = `${req.protocol}://${req.get('host')}/api/worker/${uid}/dashboard`;
+    const workerDoc = await db.collection('workers').findOne({
+      $or: [{ uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }]
+    }) || await db.collection('users').findOne({
+      $or: [{ uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }]
     });
+
+    if (!workerDoc) return res.status(404).json({ error: "Worker not found" });
+
+    // Forward directly to main worker dashboard handler
+    req.url = `/api/worker/${uid}/dashboard`;
+    return app._router.handle(req, res);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
