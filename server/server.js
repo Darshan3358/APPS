@@ -4494,12 +4494,18 @@ app.post('/api/upload', upload.any(), async (req, res) => {
 app.post('/api/users/:uid/upload-profile-photo', upload.single('profilePhoto'), async (req, res) => {
   try {
     const { uid } = req.params;
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+    let photoPath = null;
+
+    if (req.file) {
+      const result = await uploadFromBuffer(req.file.buffer, 'customer_profiles');
+      photoPath = result.secure_url;
+    } else if (req.body && req.body.profilePhoto) {
+      photoPath = req.body.profilePhoto;
     }
 
-    const result = await uploadFromBuffer(req.file.buffer, 'customer_profiles');
-    const photoPath = result.secure_url;
+    if (!photoPath) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
     await db.collection('users').updateOne(
       { $or: [{ uid: uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }] },
@@ -4520,12 +4526,18 @@ app.post('/api/users/:uid/upload-profile-photo', upload.single('profilePhoto'), 
 app.post('/api/worker/:uid/upload-profile-photo', upload.single('profilePhoto'), async (req, res) => {
   try {
     const { uid } = req.params;
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+    let photoPath = null;
+
+    if (req.file) {
+      const result = await uploadFromBuffer(req.file.buffer, 'worker_profiles');
+      photoPath = result.secure_url;
+    } else if (req.body && req.body.profilePhoto) {
+      photoPath = req.body.profilePhoto;
     }
 
-    const result = await uploadFromBuffer(req.file.buffer, 'worker_profiles');
-    const photoPath = result.secure_url;
+    if (!photoPath) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
     // Update in users collection
     await db.collection('users').updateOne(

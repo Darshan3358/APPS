@@ -113,6 +113,7 @@ export default function EditProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
@@ -120,21 +121,13 @@ export default function EditProfileScreen() {
       }
 
       const asset = result.assets[0];
+      const base64Uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       setUploading(true);
-
-      const formData = new FormData();
-      const filename = asset.uri.split('/').pop() || `profile_${Date.now()}.jpg`;
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('profilePhoto', {
-        uri: asset.uri,
-        name: filename,
-        type: asset.mimeType || type,
-      } as any);
 
       const res = await fetch(`${LOCAL_API_URL}/worker/${user.id}/upload-profile-photo`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profilePhoto: base64Uri }),
       });
 
       const data = await res.json();
