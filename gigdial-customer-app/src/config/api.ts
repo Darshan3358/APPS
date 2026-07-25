@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 /**
  * Get the base URL for API calls
  * - Web development (localhost): uses local server port 5001
- * - Native Mobile APK / Production: ALWAYS uses Render live server
+ * - Mobile/Production: uses Render live server
  */
 const getBaseURL = (): string => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -12,10 +12,14 @@ const getBaseURL = (): string => {
       return `http://${hostname}:5001`;
     }
   }
-  // Native Mobile App (Android APK / iOS)
+  if (__DEV__) {
+    return 'http://localhost:5001';
+  }
   return 'https://apps-pnsk.onrender.com';
 };
 
 export const API_URL = `${getBaseURL()}/api`;
 export const SOCKET_URL = getBaseURL();
-export const WEBSITE_URL = 'https://www.gigdial.com';
+
+console.log(`🔗 API URL: ${API_URL}`);
+console.log(`🔗 Socket URL: ${SOCKET_URL}`);
