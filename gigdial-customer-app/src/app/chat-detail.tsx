@@ -7,6 +7,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { API_URL as LOCAL_API_URL, SOCKET_URL } from '../config/api';
@@ -30,6 +31,7 @@ interface ChatMessage {
 export default function ChatDetailScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { bookingId, partnerName } = useLocalSearchParams();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -40,6 +42,9 @@ export default function ChatDetailScreen() {
   const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
+
+  const paddingTop = Platform.OS === 'android' ? Math.max(StatusBar.currentHeight || 0, insets.top) + 10 : Math.max(insets.top, 12);
+  const paddingBottom = Math.max(insets.bottom, 12);
 
   const fetchMessages = async () => {
     try {
@@ -281,7 +286,7 @@ export default function ChatDetailScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           senderRole: 'customer',
-          text: imageUrl, // Store real Image URL in text field as well!
+          text: imageUrl,
           type: 'image',
           imageUrl: imageUrl
         })
@@ -305,9 +310,10 @@ export default function ChatDetailScreen() {
     const isMe = item.senderRole === 'customer';
     const isLocationMsg = item.type === 'location' || (item.text && (item.text.includes('Location') || item.text.includes('📍')));
     
-    // Check if message is a real image message
+    // Check if message is a real image message with valid URL
     const displayImgUrl = item.imageUrl || (item.text && (item.text.startsWith('http') || item.text.startsWith('data:image/')) ? item.text : null);
-    const isImageMsg = item.type === 'image' || !!displayImgUrl;
+    const isValidImageSrc = !!displayImgUrl && (displayImgUrl.startsWith('http://') || displayImgUrl.startsWith('https://') || displayImgUrl.startsWith('data:image/'));
+    const isImageMsg = item.type === 'image' || isValidImageSrc;
 
     const lat = item.location?.latitude || 23.0225;
     const lng = item.location?.longitude || 72.5714;
@@ -374,7 +380,7 @@ export default function ChatDetailScreen() {
                 <Text style={styles.googleMapsNavBtnText}>Open Google Maps Live Tracking</Text>
               </TouchableOpacity>
             </View>
-          ) : (isImageMsg && displayImgUrl) ? (
+          ) : (isImageMsg && isValidImageSrc) ? (
             /* Real Uploaded Image Display */
             <TouchableOpacity 
               style={styles.imageCard}
@@ -386,7 +392,7 @@ export default function ChatDetailScreen() {
           ) : (
             /* Text Message Type */
             <Text style={[styles.messageText, isMe ? styles.messageTextMe : styles.messageTextOther]}>
-              {item.text}
+              {item.text || (item.type === 'image' ? '📷 Photo Attachment' : '')}
             </Text>
           )}
 
@@ -402,8 +408,8 @@ export default function ChatDetailScreen() {
     <SafeAreaView style={styles.safeContainer}>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header with Dynamic Status Bar Safe Area Padding */}
+      <View style={[styles.header, { paddingTop }]}>
         <TouchableOpacity 
           style={styles.backBtn} 
           onPress={() => {
@@ -466,8 +472,8 @@ export default function ChatDetailScreen() {
           </View>
         )}
 
-        {/* Input Bar */}
-        <View style={styles.inputContainer}>
+        {/* Input Bar with Dynamic Bottom Navigation Bar Safe Area Padding */}
+        <View style={[styles.inputContainer, { paddingBottom }]}>
           <TouchableOpacity 
             style={[styles.attachToggleBtn, showAttachMenu && styles.attachToggleBtnActive]} 
             onPress={() => setShowAttachMenu(!showAttachMenu)}
@@ -548,7 +554,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E8EC',
@@ -774,7 +780,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingTop: 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E8EC',
