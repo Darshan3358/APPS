@@ -114,12 +114,12 @@ export default function DashboardTab() {
     if (!userId) return;
     try {
       // 1. Fetch Stats
-      const statsRes = await fetch(`${LOCAL_API_URL}/workers/dashboard/${userId}`);
+      const statsRes = await fetch(`${LOCAL_API_URL}/worker/${userId}/dashboard`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setStats(statsData);
       } else {
-        const altRes = await fetch(`${LOCAL_API_URL}/worker/${userId}/dashboard`);
+        const altRes = await fetch(`${LOCAL_API_URL}/workers/dashboard/${userId}`);
         if (altRes.ok) {
           const statsData = await altRes.json();
           setStats(statsData);

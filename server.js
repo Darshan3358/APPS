@@ -3981,20 +3981,27 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
   try {
     const { uid } = req.params;
 
-    // Find worker doc in workers or users collection
-    const workerDoc = await db.collection('workers').findOne({
-      $or: [
-        { uid: uid },
-        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
-      ]
-    }) || await db.collection('users').findOne({
-      $or: [
-        { uid: uid },
-        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
-      ]
-    });
+    // Flexible query to find worker doc in workers or users collection
+    const queryConditions = [
+      { uid: uid },
+      { id: uid },
+      { name: uid },
+      { email: uid },
+      { phone: uid }
+    ];
+    if (ObjectId.isValid(uid)) {
+      queryConditions.push({ _id: new ObjectId(uid) });
+    }
+
+    const workerDoc = await db.collection('workers').findOne({ $or: queryConditions })
+                   || await db.collection('users').findOne({ $or: queryConditions });
 
     const workerCategory = workerDoc ? (workerDoc.mainCategory || workerDoc.category || '') : '';
+    const workerName = workerDoc?.name || uid;
+    const workerEmail = workerDoc?.email || '';
+    const workerPhone = workerDoc?.phone || '';
+    const workerIdStr = workerDoc?._id ? workerDoc._id.toString() : uid;
+    const workerUidStr = workerDoc?.uid || '';
 
     // 1. Calculate Today's / Active Pending Leads
     const allPendingBookings = await db.collection('bookings').find({
@@ -4024,7 +4031,7 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
     const matchingPendingLeads = allPendingBookings.filter(b => {
       const bWorkerIdStr = b.workerId ? String(b.workerId) : '';
       const uidStr = String(uid);
-      const isDirectMatch = bWorkerIdStr === uidStr || 
+      const isDirectMatch = bWorkerIdStr === uidStr || bWorkerIdStr === workerIdStr ||
         (ObjectId.isValid(bWorkerIdStr) && ObjectId.isValid(uidStr) && bWorkerIdStr === uidStr);
       return isDirectMatch || categoryMatchesLead(workerCategory, b.title, b.description);
     });
@@ -4032,14 +4039,18 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
     const todayLeadsCount = matchingPendingLeads.length;
 
     // 2. Calculate Completed Jobs for this worker
+    const workerIdentifiers = [
+      { workerId: uid },
+      { workerId: workerIdStr },
+      ...(workerUidStr ? [{ workerId: workerUidStr }] : []),
+      ...(workerName ? [{ workerName: workerName }, { name: workerName }] : []),
+      ...(workerPhone ? [{ workerPhone: workerPhone }] : []),
+      ...(workerEmail ? [{ workerEmail: workerEmail }] : []),
+      ...(ObjectId.isValid(uid) ? [{ workerId: new ObjectId(uid) }] : [])
+    ];
+
     const completedBookings = await db.collection('bookings').find({
-      $or: [
-        { workerId: uid },
-        { workerId: String(uid) },
-        { workerId: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-        { workerPhone: workerDoc ? workerDoc.phone : '' },
-        { workerEmail: workerDoc ? workerDoc.email : '' }
-      ],
+      $or: workerIdentifiers,
       status: { $in: ['completed', 'Completed'] }
     }).toArray();
 
