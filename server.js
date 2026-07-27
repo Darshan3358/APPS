@@ -4150,48 +4150,66 @@ const handleOnlineStatus = async (req, res) => {
       return res.status(400).json({ error: "isOnline field is required" });
     }
 
-    const onlineVal = !!isOnline;
+    const onlineVal = isOnline === true || isOnline === 'true' || isOnline === 1;
 
-    // Find linked user to extract name, email, phone
-    const targetUser = await db.collection('users').findOne({
-      $or: [
-        { uid: uid },
-        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
-      ]
-    });
+    // Flexible search conditions to locate worker document
+    const queryConditions = [
+      { uid: uid },
+      { id: uid },
+      { name: uid },
+      { email: uid },
+      { phone: uid }
+    ];
+    if (ObjectId.isValid(uid)) {
+      queryConditions.push({ _id: new ObjectId(uid) });
+    }
+
+    let targetUser = await db.collection('users').findOne({ $or: queryConditions });
+    if (!targetUser) {
+      targetUser = await db.collection('workers').findOne({ $or: queryConditions });
+    }
 
     const userEmail = targetUser?.email || '';
     const userName = targetUser?.name || '';
     const userPhone = targetUser?.phone || '';
+    const userUid = targetUser?.uid || '';
+    const userObjId = targetUser?._id;
+
+    const updateFilter = {
+      $or: [
+        { uid: uid },
+        { id: uid },
+        { name: uid },
+        ...(ObjectId.isValid(uid) ? [{ _id: new ObjectId(uid) }] : []),
+        ...(userObjId ? [{ _id: userObjId }] : []),
+        ...(userUid ? [{ uid: userUid }] : []),
+        ...(userEmail ? [{ email: userEmail }] : []),
+        ...(userName ? [{ name: userName }] : []),
+        ...(userPhone ? [{ phone: userPhone }] : [])
+      ]
+    };
 
     // Update in users collection
     await db.collection('users').updateMany(
-      { 
-        $or: [
-          { uid: uid },
-          { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-          { email: userEmail },
-          { phone: userPhone }
-        ] 
-      },
+      updateFilter,
       { $set: { isOnline: onlineVal, updatedAt: new Date() } }
     );
 
     // Update in workers collection
     await db.collection('workers').updateMany(
-      { 
-        $or: [
-          { uid: uid },
-          { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-          { email: userEmail },
-          { phone: userPhone }
-        ] 
-      },
+      updateFilter,
       { $set: { isOnline: onlineVal, updatedAt: new Date() } }
     );
 
-    // Emit real-time socket event for online status update
-    io.emit('worker_status_change', { uid, isOnline: onlineVal });
+    // Emit real-time socket event for online status update to all connected clients
+    io.emit('worker_status_change', { 
+      uid, 
+      id: userObjId ? userObjId.toString() : uid, 
+      name: userName || uid,
+      isOnline: onlineVal 
+    });
+
+    console.log(`🟢 Worker status updated: ${userName || uid} -> ${onlineVal ? 'ONLINE' : 'OFFLINE'}`);
 
     res.json({ success: true, isOnline: onlineVal, message: `Worker online status updated to ${onlineVal}` });
   } catch (err) {
