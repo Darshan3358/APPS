@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,7 +7,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 function AppContent() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
   const [activeToast, setActiveToast] = useState<{
     title: string;
@@ -21,7 +22,7 @@ function AppContent() {
     const fetchLatestNotification = async () => {
       try {
         const res = await fetch(`${API_URL}/notifications`, {
-          headers: { Authorization: `Bearer ${user.token || ''}` },
+          headers: { Authorization: `Bearer ${token || ''}` },
         });
         if (res.ok) {
           const notifications = await res.json();

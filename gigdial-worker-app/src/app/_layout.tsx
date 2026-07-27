@@ -2,6 +2,7 @@ import { Stack, useRouter } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,14 @@ interface LeadData {
   date: string;
   time: string;
   serviceNeeded: string;
+}
+
+function getTodayDateString(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function categoryMatchesLead(workerCategoryString: string, leadTitle: string, leadDescription: string): boolean {
@@ -86,7 +95,37 @@ function AppContent() {
     const userId = user?.id || (user as any)?._id;
     if (!user || !userId) return;
 
-    const seenLeadIds = new Set<string>();
+    const todayStr = getTodayDateString();
+    const storageKey = `@seen_lead_ids_${userId}_${todayStr}`;
+    let seenLeadIds = new Set<string>();
+
+    // Load persistent seen leads for today
+    AsyncStorage.getItem(storageKey).then((stored) => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            seenLeadIds = new Set(parsed);
+          }
+        } catch (e) {}
+      }
+    });
+
+    const isLeadForCurrentDay = (lead: any): boolean => {
+      if (!lead) return false;
+      const sched = (lead.schedule || lead.date || '').toLowerCase();
+      if (sched.includes('today') || sched.includes(todayStr)) return true;
+      if (lead.createdAt) {
+        const created = new Date(lead.createdAt);
+        const cYyyy = created.getFullYear();
+        const cMm = String(created.getMonth() + 1).padStart(2, '0');
+        const cDd = String(created.getDate()).padStart(2, '0');
+        if (`${cYyyy}-${cMm}-${cDd}` === todayStr) return true;
+      }
+      // If schedule/date is not specified, treat as current day
+      if (!lead.schedule && !lead.date && !lead.createdAt) return true;
+      return false;
+    };
 
     const checkNewLeadsAndNotifications = async () => {
       try {
@@ -102,6 +141,9 @@ function AppContent() {
               const leadId = lead.id || lead._id || '';
               if (!leadId || seenLeadIds.has(leadId)) return false;
 
+              // Date-wise check: lead must be for current day
+              if (!isLeadForCurrentDay(lead)) return false;
+
               const isTargetedWorker = lead.workerId && (
                 String(lead.workerId) === String(userId) ||
                 String(lead.workerId) === String(user?.id) ||
@@ -114,6 +156,7 @@ function AppContent() {
             if (latestLead) {
               const leadId = latestLead.id || latestLead._id || '';
               seenLeadIds.add(leadId);
+              AsyncStorage.setItem(storageKey, JSON.stringify(Array.from(seenLeadIds))).catch(() => {});
 
               let schedDate = 'Today';
               let schedTime = '10:30 AM';

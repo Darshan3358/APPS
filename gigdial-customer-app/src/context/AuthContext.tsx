@@ -29,6 +29,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const safeFetch = async (endpoint: string, options: RequestInit = {}) => {
+  const primaryUrl = `${LOCAL_API_URL}${endpoint}`;
+  try {
+    const res = await fetch(primaryUrl, options);
+    return res;
+  } catch (err: any) {
+    const fallbackBase = LOCAL_API_URL.includes('localhost') || LOCAL_API_URL.includes('127.0.0.1')
+      ? 'https://apps-pnsk.onrender.com/api'
+      : 'http://localhost:5001/api';
+    
+    try {
+      const fallbackUrl = `${fallbackBase}${endpoint}`;
+      const resFallback = await fetch(fallbackUrl, options);
+      return resFallback;
+    } catch (fallbackErr) {
+      throw new Error('Unable to connect to server. Please check your internet connection and try again.');
+    }
+  }
+};
+
+const formatErrorMessage = (errMessage?: string): string => {
+  if (!errMessage) return 'An unexpected error occurred. Please try again.';
+  const lower = errMessage.toLowerCase();
+  if (lower.includes('failed to fetch') || lower.includes('network request failed') || lower.includes('networkerror') || lower.includes('typeerror')) {
+    return 'Unable to connect to server. Please check your internet connection and try again.';
+  }
+  return errMessage;
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -50,8 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (storedToken) {
           setToken(storedToken);
-          // Verify token against live backend /api/auth/me
-          const res = await fetch(`${LOCAL_API_URL}/auth/me`, {
+          const res = await safeFetch('/auth/me', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${storedToken}`
@@ -66,7 +94,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
             setUser(mappedUser);
           } else {
-            // Token expired/invalid, clear session
             await AsyncStorage.removeItem('token');
             await AsyncStorage.removeItem('user');
             setToken(null);
@@ -115,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         [isEmail ? 'email' : 'phone']: emailOrPhone
       };
 
-      const res = await fetch(`${LOCAL_API_URL}/auth/login`, {
+      const res = await safeFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -123,14 +150,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await res.json();
       if (!res.ok) {
-        return { success: false, error: data.error || 'Login failed' };
+        return { success: false, error: formatErrorMessage(data.error || 'Login failed') };
       }
 
       setUser(data.user);
       setToken(data.token || 'mock-token');
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error' };
+      return { success: false, error: formatErrorMessage(err.message) };
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         city
       };
 
-      const res = await fetch(`${LOCAL_API_URL}/auth/register`, {
+      const res = await safeFetch('/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -161,18 +188,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await res.json();
       if (!res.ok) {
-        return { success: false, error: data.error || 'Registration failed' };
+        return { success: false, error: formatErrorMessage(data.error || 'Registration failed') };
       }
 
       if (data.otpRequired) {
         return { success: true, otpRequired: true, email: data.email };
       }
 
-      setUser(data.user);
-      setToken(data.token || 'mock-token');
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error' };
+      return { success: false, error: formatErrorMessage(err.message) };
     } finally {
       setIsLoading(false);
     }
@@ -181,21 +206,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const verifyOtp = async (email: string, otp: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${LOCAL_API_URL}/auth/verify-otp`, {
+      const res = await safeFetch('/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp })
       });
       const data = await res.json();
       if (!res.ok) {
-        return { success: false, error: data.error || 'Verification failed' };
+        return { success: false, error: formatErrorMessage(data.error || 'Verification failed') };
       }
 
-      setUser(data.user);
-      setToken(data.token || 'mock-token');
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error' };
+      return { success: false, error: formatErrorMessage(err.message) };
     } finally {
       setIsLoading(false);
     }

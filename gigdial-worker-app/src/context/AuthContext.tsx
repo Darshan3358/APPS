@@ -39,6 +39,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const safeFetch = async (endpoint: string, options: RequestInit = {}) => {
+  const primaryUrl = `${LOCAL_API_URL}${endpoint}`;
+  try {
+    const res = await fetch(primaryUrl, options);
+    return res;
+  } catch (err: any) {
+    const fallbackBase = LOCAL_API_URL.includes('localhost') || LOCAL_API_URL.includes('127.0.0.1')
+      ? 'https://apps-pnsk.onrender.com/api'
+      : 'http://localhost:5001/api';
+    
+    try {
+      const fallbackUrl = `${fallbackBase}${endpoint}`;
+      const resFallback = await fetch(fallbackUrl, options);
+      return resFallback;
+    } catch (fallbackErr) {
+      throw new Error('Unable to connect to server. Please check your internet connection and try again.');
+    }
+  }
+};
+
+const formatErrorMessage = (errMessage?: string): string => {
+  if (!errMessage) return 'An unexpected error occurred. Please try again.';
+  const lower = errMessage.toLowerCase();
+  if (lower.includes('failed to fetch') || lower.includes('network request failed') || lower.includes('networkerror') || lower.includes('typeerror')) {
+    return 'Unable to connect to server. Please check your internet connection and try again.';
+  }
+  return errMessage;
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -53,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const storedToken = await AsyncStorage.getItem('token');
         if (storedToken) {
           setToken(storedToken);
-          const res = await fetch(`${LOCAL_API_URL}/auth/me`, {
+          const res = await safeFetch('/auth/me', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${storedToken}`
@@ -116,7 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         [isEmail ? 'email' : 'phone']: emailOrPhone
       };
 
-      const res = await fetch(`${LOCAL_API_URL}/auth/login`, {
+      const res = await safeFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -124,7 +153,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await res.json();
       if (!res.ok && res.status !== 202) {
-        return { success: false, error: data.error || 'Login failed' };
+        return { success: false, error: formatErrorMessage(data.error || 'Login failed') };
       }
 
       if (res.status === 202 && data.incomplete) {
@@ -134,7 +163,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           incomplete: true,
           registrationStep: data.registrationStep,
           userId: data.userId,
-          error: data.error
+          error: formatErrorMessage(data.error)
         };
       }
 
@@ -146,7 +175,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setToken(data.token || 'mock-token');
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error' };
+      return { success: false, error: formatErrorMessage(err.message) };
     } finally {
       setIsLoading(false);
     }
@@ -160,35 +189,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const registerStep1 = async (data: any) => {
     try {
-      const res = await fetch(`${LOCAL_API_URL}/auth/register/step1`, {
+      const res = await safeFetch('/auth/register/step1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       const resData = await res.json();
-      if (!res.ok) return { success: false, error: resData.error || 'Step 1 failed' };
+      if (!res.ok) return { success: false, error: formatErrorMessage(resData.error || 'Step 1 failed') };
       
       setTempRegData((prev: any) => ({ ...prev, ...data }));
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error' };
+      return { success: false, error: formatErrorMessage(err.message) };
     }
   };
 
   const registerStep2 = async (data: any) => {
     try {
-      const res = await fetch(`${LOCAL_API_URL}/auth/register/step2`, {
+      const res = await safeFetch('/auth/register/step2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       const resData = await res.json();
-      if (!res.ok) return { success: false, error: resData.error || 'Step 2 failed' };
+      if (!res.ok) return { success: false, error: formatErrorMessage(resData.error || 'Step 2 failed') };
 
       setTempRegData((prev: any) => ({ ...prev, ...data }));
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error' };
+      return { success: false, error: formatErrorMessage(err.message) };
     }
   };
 

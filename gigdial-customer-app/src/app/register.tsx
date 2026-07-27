@@ -43,9 +43,9 @@ export default function RegisterScreen() {
         setOtpEmail(res.email || email);
         setOtpModalVisible(true);
       } else {
-        showToast('Account created successfully! Welcome to GigDial.', 'success');
+        showToast('Account created successfully! Please login with your credentials.', 'success');
         setTimeout(() => {
-          router.replace('/(tabs)/dashboard');
+          router.replace('/login');
         }, 1500);
       }
     } else {
@@ -64,9 +64,9 @@ export default function RegisterScreen() {
     setVerifyingOtp(false);
     if (res.success) {
       setOtpModalVisible(false);
-      showToast('Account created successfully! Welcome to GigDial.', 'success');
+      showToast('Account created successfully! Please login with your credentials.', 'success');
       setTimeout(() => {
-        router.replace('/(tabs)/dashboard');
+        router.replace('/login');
       }, 1500);
     } else {
       setOtpError(res.error || 'Invalid OTP. Please try again.');

@@ -16,7 +16,6 @@ export default function RegisterStep3() {
   const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : insets.top;
 
   const [serviceType, setServiceType] = useState('Residency');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [aadhaarNumber, setAadhaarNumber] = useState<string>(tempRegData.aadhaarNumber || '');
   const [panNumber, setPanNumber] = useState<string>(tempRegData.panNumber || '');
   const [aadhaarUri, setAadhaarUri] = useState<string>('');
@@ -24,9 +23,6 @@ export default function RegisterStep3() {
   
   const [aadhaarFile, setAadhaarFile] = useState<any>(null);
   const [panFile, setPanFile] = useState<any>(null);
-
-  const [skillsList, setSkillsList] = useState<{ name: string }[]>([]);
-  const [loadingSkills, setLoadingSkills] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -43,38 +39,7 @@ export default function RegisterStep3() {
       router.replace('/register-step1');
       return;
     }
-
-    const fetchSkills = async () => {
-      setLoadingSkills(true);
-      try {
-        const res = await fetch(`${LOCAL_API_URL}/master/skills`);
-        if (res.ok) {
-          const data = await res.json();
-          setSkillsList(data);
-        } else {
-          throw new Error();
-        }
-      } catch {
-        // Fallback static list
-        setSkillsList([
-          { name: 'Plumbing' }, { name: 'Electrician' }, { name: 'Carpentry' }, { name: 'Painting' },
-          { name: 'Masonry' }, { name: 'Welding' }, { name: 'AC Repair' }, { name: 'Appliance Repair' },
-          { name: 'Pest Control' }, { name: 'Home Cleaning' }, { name: 'Gardening' }, { name: 'Waterproofing' }
-        ]);
-      } finally {
-        setLoadingSkills(false);
-      }
-    };
-    fetchSkills();
   }, [tempRegData.email]);
-
-  const toggleSkill = (skill: string) => {
-    if (selectedSkills.includes(skill)) {
-      setSelectedSkills(selectedSkills.filter(s => s !== skill));
-    } else {
-      setSelectedSkills([...selectedSkills, skill]);
-    }
-  };
 
   const handlePickAadhaar = async () => {
     if ((Platform.OS as string) === 'web') {
@@ -188,7 +153,7 @@ export default function RegisterStep3() {
     try {
       const res = await registerStep3(
         serviceType,
-        selectedSkills,
+        [],
         aadhaarUri,
         panUri,
         aadhaarFile,
@@ -203,7 +168,7 @@ export default function RegisterStep3() {
         } else {
           Alert.alert(
             'Account Created Successfully',
-            'Your professional profile has been created successfully. Please wait for admin approval before logging in.',
+            'Your professional profile has been created successfully. Please login with your credentials.',
             [{ text: 'OK', onPress: () => router.replace('/login') }]
           );
         }
@@ -229,7 +194,7 @@ export default function RegisterStep3() {
       setOtpModalVisible(false);
       Alert.alert(
         'Account Created Successfully',
-        'Your professional profile has been created successfully. Please wait for admin approval before logging in.',
+        'Your professional profile has been created successfully. Please login with your credentials.',
         [{ text: 'OK', onPress: () => router.replace('/login') }]
       );
     } else {
@@ -274,29 +239,6 @@ export default function RegisterStep3() {
               );
             })}
           </View>
-
-          {/* Additional Skills */}
-          <Text style={styles.label}>Additional Skills</Text>
-          {loadingSkills ? (
-            <ActivityIndicator size="small" color="#0F2C59" style={{ marginVertical: 10 }} />
-          ) : (
-            <View style={styles.skillsContainer}>
-              {skillsList.map((skill) => {
-                const selected = selectedSkills.includes(skill.name);
-                return (
-                  <TouchableOpacity 
-                    key={skill.name} 
-                    style={[styles.skillChip, selected && styles.skillChipActive]}
-                    onPress={() => toggleSkill(skill.name)}
-                  >
-                    <Text style={[styles.skillChipText, selected && styles.skillChipTextActive]}>
-                      {skill.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
 
           {/* Aadhaar Number input */}
           <Input
