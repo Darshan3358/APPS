@@ -20,7 +20,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -51,9 +54,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "3f20a1d0-a648-44c4-9a6d-95c298a04ae6"
+        "projectId": "e6477185-6ddf-48dc-9633-2fa4c8943ff7"
       }
     },
-    "owner": "darshan0777"
+    "owner": "darshanthanki777"
   }
 }
