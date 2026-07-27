@@ -66,6 +66,9 @@ function categoryMatchesLead(workerCategoryString: string, leadTitle: string, le
   return isMatched;
 }
 
+const globalSeenLeadIds = new Set<string>();
+let isStorageLoaded = false;
+
 function AppContent() {
   const { user, token } = useAuth();
   const router = useRouter();
@@ -97,38 +100,46 @@ function AppContent() {
 
     const todayStr = getTodayDateString();
     const storageKey = `@seen_lead_ids_${userId}_${todayStr}`;
-    let seenLeadIds = new Set<string>();
 
-    // Load persistent seen leads for today
-    AsyncStorage.getItem(storageKey).then((stored) => {
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            seenLeadIds = new Set(parsed);
-          }
-        } catch (e) {}
-      }
-    });
-
-    const isLeadForCurrentDay = (lead: any): boolean => {
+    const isLiveLeadForCurrentDay = (lead: any): boolean => {
       if (!lead) return false;
+      const now = new Date();
+      const tYyyy = now.getFullYear();
+      const tMm = String(now.getMonth() + 1).padStart(2, '0');
+      const tDd = String(now.getDate()).padStart(2, '0');
+      const currentDayFormatted = `${tYyyy}-${tMm}-${tDd}`;
+
+      // Check schedule text
       const sched = (lead.schedule || lead.date || '').toLowerCase();
-      if (sched.includes('today') || sched.includes(todayStr)) return true;
+      if (sched.includes('today') || sched.includes(currentDayFormatted)) return true;
+
+      // Check creation timestamp (must be created today)
       if (lead.createdAt) {
         const created = new Date(lead.createdAt);
         const cYyyy = created.getFullYear();
         const cMm = String(created.getMonth() + 1).padStart(2, '0');
         const cDd = String(created.getDate()).padStart(2, '0');
-        if (`${cYyyy}-${cMm}-${cDd}` === todayStr) return true;
+        if (`${cYyyy}-${cMm}-${cDd}` === currentDayFormatted) return true;
       }
-      // If schedule/date is not specified, treat as current day
-      if (!lead.schedule && !lead.date && !lead.createdAt) return true;
       return false;
     };
 
     const checkNewLeadsAndNotifications = async () => {
       try {
+        // Ensure seen lead storage for today is loaded once BEFORE checking
+        if (!isStorageLoaded) {
+          try {
+            const stored = await AsyncStorage.getItem(storageKey);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed)) {
+                parsed.forEach((id: string) => globalSeenLeadIds.add(id));
+              }
+            }
+          } catch (e) {}
+          isStorageLoaded = true;
+        }
+
         const workerCategory = user.mainCategory || (user as any).category || '';
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -139,10 +150,11 @@ function AppContent() {
           if (Array.isArray(leads) && leads.length > 0) {
             const latestLead = leads.find((lead: any) => {
               const leadId = lead.id || lead._id || '';
-              if (!leadId || seenLeadIds.has(leadId)) return false;
+              // Don't show if already seen or dismissed
+              if (!leadId || globalSeenLeadIds.has(leadId)) return false;
 
-              // Date-wise check: lead must be for current day
-              if (!isLeadForCurrentDay(lead)) return false;
+              // Only show live leads for current day
+              if (!isLiveLeadForCurrentDay(lead)) return false;
 
               const isTargetedWorker = lead.workerId && (
                 String(lead.workerId) === String(userId) ||
@@ -155,8 +167,8 @@ function AppContent() {
 
             if (latestLead) {
               const leadId = latestLead.id || latestLead._id || '';
-              seenLeadIds.add(leadId);
-              AsyncStorage.setItem(storageKey, JSON.stringify(Array.from(seenLeadIds))).catch(() => {});
+              globalSeenLeadIds.add(leadId);
+              AsyncStorage.setItem(storageKey, JSON.stringify(Array.from(globalSeenLeadIds))).catch(() => {});
 
               let schedDate = 'Today';
               let schedTime = '10:30 AM';
@@ -187,7 +199,7 @@ function AppContent() {
     };
 
     checkNewLeadsAndNotifications();
-    const interval = setInterval(checkNewLeadsAndNotifications, 4000);
+    const interval = setInterval(checkNewLeadsAndNotifications, 5000);
 
     return () => clearInterval(interval);
   }, [user, token]);
@@ -198,12 +210,29 @@ function AppContent() {
     router.push('/notifications');
   };
 
+  const markLeadAsSeen = (leadId: string) => {
+    if (!leadId) return;
+    globalSeenLeadIds.add(leadId);
+    const userId = user?.id || (user as any)?._id;
+    if (userId) {
+      const todayStr = getTodayDateString();
+      const storageKey = `@seen_lead_ids_${userId}_${todayStr}`;
+      AsyncStorage.setItem(storageKey, JSON.stringify(Array.from(globalSeenLeadIds))).catch(() => {});
+    }
+  };
+
   const handleViewLead = () => {
+    if (activeLead?.id) {
+      markLeadAsSeen(activeLead.id);
+    }
     setNewLeadModalVisible(false);
     router.push('/(tabs)/leads');
   };
 
   const handleDismissLead = () => {
+    if (activeLead?.id) {
+      markLeadAsSeen(activeLead.id);
+    }
     setNewLeadModalVisible(false);
   };
 
