@@ -126,39 +126,12 @@ export default function DashboardScreen() {
     fetchWorkers();
     fetchUnreadCount();
 
-    const socketUrl = LOCAL_API_URL.replace('/api', '');
-    const socket = io(socketUrl, {
-      transports: ['polling', 'websocket'],
-    });
-
-    socket.on('worker_status_change', (data: { uid?: string; id?: string; name?: string; isOnline: boolean }) => {
-      setWorkers(prevWorkers =>
-        prevWorkers.map(w => {
-          const isTarget =
-            (data.id && (w.id === data.id || w.id.toString() === data.id)) ||
-            (data.uid && (w.id === data.uid || (w as any).uid === data.uid)) ||
-            (data.name && w.name.toLowerCase() === data.name.toLowerCase());
-          if (isTarget) {
-            return {
-              ...w,
-              isOnline: data.isOnline,
-              availability: data.isOnline ? 'Available Now' : 'Offline'
-            };
-          }
-          return w;
-        })
-      );
-    });
-
     const interval = setInterval(() => {
       fetchWorkers();
       fetchUnreadCount();
-    }, 4000);
+    }, 3000);
 
-    return () => {
-      socket.disconnect();
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, []);
 
   const fetchWorkers = async () => {

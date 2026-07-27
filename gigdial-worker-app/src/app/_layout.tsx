@@ -2,8 +2,7 @@ import { Stack, useRouter } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
-import { API_URL, SOCKET_URL } from '../config/api';
+import { API_URL } from '../config/api';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -87,105 +86,68 @@ function AppContent() {
     const userId = user?.id || (user as any)?._id;
     if (!user || !userId) return;
 
-    console.log(`🔌 Worker connecting to sockets for room: ${userId}`);
-    const socketUrl = SOCKET_URL || API_URL.replace('/api', '');
-    const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-    });
+    const seenLeadIds = new Set<string>();
 
-    socket.on('connect', () => {
-      console.log('✅ Connected to socket!');
-      socket.emit('join_user', userId);
-    });
+    const checkNewLeadsAndNotifications = async () => {
+      try {
+        const workerCategory = user.mainCategory || (user as any).category || '';
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const workerCategory = user.mainCategory || (user as any).category || '';
+        const res = await fetch(`${API_URL}/bookings/pending`, { headers });
+        if (res.ok) {
+          const leads = await res.json();
+          if (Array.isArray(leads) && leads.length > 0) {
+            const latestLead = leads.find((lead: any) => {
+              const leadId = lead.id || lead._id || '';
+              if (!leadId || seenLeadIds.has(leadId)) return false;
 
-    // Listen to new bookings/leads broadcasted by socket
-    socket.on('new_lead', (lead) => {
-      console.log('⚡ New Lead socket event:', lead);
-      
-      const isTargetedWorker = lead.workerId && (
-        String(lead.workerId) === String(userId) || 
-        String(lead.workerId) === String(user?.id) || 
-        String(lead.workerId) === String((user as any)?._id)
-      );
-      const matchesCategory = !workerCategory || categoryMatchesLead(workerCategory, lead.title, lead.description);
+              const isTargetedWorker = lead.workerId && (
+                String(lead.workerId) === String(userId) ||
+                String(lead.workerId) === String(user?.id) ||
+                String(lead.workerId) === String((user as any)?._id)
+              );
+              const matchesCategory = !workerCategory || categoryMatchesLead(workerCategory, lead.title, lead.description);
+              return isTargetedWorker || matchesCategory;
+            });
 
-      if (!isTargetedWorker && !matchesCategory) {
-        console.log('Lead is not for this worker');
-        return;
-      }
+            if (latestLead) {
+              const leadId = latestLead.id || latestLead._id || '';
+              seenLeadIds.add(leadId);
 
-      // Format date and time
-      let schedDate = 'Today';
-      let schedTime = '10:30 AM';
-      if (lead.schedule) {
-        const parts = lead.schedule.split(' at ');
-        if (parts[0]) schedDate = parts[0];
-        if (parts[1]) schedTime = parts[1];
-      }
+              let schedDate = 'Today';
+              let schedTime = '10:30 AM';
+              if (latestLead.schedule) {
+                const parts = latestLead.schedule.split(' at ');
+                if (parts[0]) schedDate = parts[0];
+                if (parts[1]) schedTime = parts[1];
+              }
 
-      setActiveLead({
-        id: lead.id || lead._id || '',
-        title: lead.title || 'Service Request',
-        customerName: lead.customerName || 'Amit Sharma',
-        customerPhoto: lead.customerPhoto || undefined,
-        address: lead.address || 'Adajan, Surat',
-        distance: lead.distance || '2.5 km away',
-        date: schedDate,
-        time: schedTime,
-        serviceNeeded: lead.title || 'Service Request'
-      });
-      setNewLeadModalVisible(true);
-    });
-
-    socket.on('new_notification', (notification) => {
-      console.log('🔔 Received socket notification:', notification);
-      
-      // If notification is a new lead (fallback socket check)
-      if (notification.type === 'new_lead') {
-        const lead = notification.booking || notification;
-        
-        // Filter by category to match worker categories
-        if (user.mainCategory) {
-          if (!categoryMatchesLead(user.mainCategory, lead.title, lead.description)) {
-            console.log('Lead category does not match worker categories:', user.mainCategory);
-            return;
+              setActiveLead({
+                id: leadId,
+                title: latestLead.title || 'Service Request',
+                customerName: latestLead.customerName || 'Amit Sharma',
+                customerPhoto: latestLead.customerPhoto || undefined,
+                address: latestLead.address || 'Adajan, Surat',
+                distance: latestLead.distance || '2.5 km away',
+                date: schedDate,
+                time: schedTime,
+                serviceNeeded: latestLead.title || 'Service Request'
+              });
+              setNewLeadModalVisible(true);
+            }
           }
         }
-        
-        let schedDate = 'Today';
-        let schedTime = '10:30 AM';
-        if (lead.schedule) {
-          const parts = lead.schedule.split(' at ');
-          if (parts[0]) schedDate = parts[0];
-          if (parts[1]) schedTime = parts[1];
-        }
-
-        setActiveLead({
-          id: lead.id || lead._id || '',
-          title: lead.title || notification.title || 'Service Request',
-          customerName: lead.customerName || 'Amit Sharma',
-          customerPhoto: lead.customerPhoto || undefined,
-          address: lead.address || 'Adajan, Surat',
-          distance: lead.distance || '2.5 km away',
-          date: schedDate,
-          time: schedTime,
-          serviceNeeded: lead.title || 'Service Request'
-        });
-        setNewLeadModalVisible(true);
-      } else {
-        setActiveToast(notification);
-        setTimeout(() => {
-          setActiveToast(null);
-        }, 5000);
+      } catch (err) {
+        // Silently ignore HTTP polling errors
       }
-    });
-
-    return () => {
-      socket.disconnect();
     };
-  }, [user]);
+
+    checkNewLeadsAndNotifications();
+    const interval = setInterval(checkNewLeadsAndNotifications, 4000);
+
+    return () => clearInterval(interval);
+  }, [user, token]);
 
   const handleToastPress = () => {
     if (!activeToast) return;

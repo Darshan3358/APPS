@@ -1,8 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
 import { API_URL } from '../config/api';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,27 +17,36 @@ function AppContent() {
   useEffect(() => {
     if (!user || !user.id) return;
 
-    console.log(`🔌 Customer connecting to sockets for room: ${user.id}`);
-    const socket = io(API_URL.replace('/api', ''), {
-      transports: ['polling', 'websocket'],
-    });
-
-    socket.on('connect', () => {
-      console.log('✅ Connected to socket!');
-      socket.emit('join_user', user.id);
-    });
-
-    socket.on('new_notification', (notification) => {
-      console.log('🔔 Received socket notification:', notification);
-      setActiveToast(notification);
-      setTimeout(() => {
-        setActiveToast(null);
-      }, 5000);
-    });
-
-    return () => {
-      socket.disconnect();
+    let lastNotificationId = '';
+    const fetchLatestNotification = async () => {
+      try {
+        const res = await fetch(`${API_URL}/notifications`, {
+          headers: { Authorization: `Bearer ${user.token || ''}` },
+        });
+        if (res.ok) {
+          const notifications = await res.json();
+          if (Array.isArray(notifications) && notifications.length > 0) {
+            const latest = notifications[0];
+            if (latest && latest._id && latest._id !== lastNotificationId && !latest.read) {
+              lastNotificationId = latest._id;
+              setActiveToast({
+                title: latest.title || 'Notification',
+                message: latest.message || 'You have a new update.',
+                type: latest.type
+              });
+              setTimeout(() => {
+                setActiveToast(null);
+              }, 5000);
+            }
+          }
+        }
+      } catch (err) {}
     };
+
+    fetchLatestNotification();
+    const interval = setInterval(fetchLatestNotification, 5000);
+
+    return () => clearInterval(interval);
   }, [user]);
 
   const handleToastPress = () => {

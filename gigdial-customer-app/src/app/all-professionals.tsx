@@ -7,8 +7,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL as LOCAL_API_URL } from '../config/api';
 
-import { io } from 'socket.io-client';
-
 interface Worker {
   id: string;
   name: string;
@@ -57,30 +55,8 @@ export default function AllProfessionalsScreen() {
 
   useEffect(() => {
     fetchWorkers();
-
-    const socketUrl = LOCAL_API_URL.replace('/api', '');
-    const socket = io(socketUrl, {
-      transports: ['polling', 'websocket'],
-    });
-
-    socket.on('worker_status_change', (data: { uid?: string; id?: string; name?: string; isOnline: boolean }) => {
-      setWorkers(prevWorkers =>
-        prevWorkers.map(w => {
-          const isTarget =
-            (data.id && (w.id === data.id || w.id.toString() === data.id)) ||
-            (data.uid && (w.id === data.uid || (w as any).uid === data.uid)) ||
-            (data.name && w.name.toLowerCase() === data.name.toLowerCase());
-          if (isTarget) {
-            return { ...w, isOnline: data.isOnline };
-          }
-          return w;
-        })
-      );
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    const interval = setInterval(fetchWorkers, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchWorkers = async () => {

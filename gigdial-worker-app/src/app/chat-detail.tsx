@@ -8,9 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
-import { io } from 'socket.io-client';
-import { API_URL as LOCAL_API_URL, SOCKET_URL } from '../config/api';
+import { API_URL as LOCAL_API_URL } from '../config/api';
 
 interface ChatMessage {
   _id?: string;
@@ -60,30 +58,8 @@ export default function ChatDetailScreen() {
 
   useEffect(() => {
     fetchMessages();
-
-    // Establish WebSocket connection
-    const socket = io(SOCKET_URL);
-    socket.emit('join_booking', bookingId);
-
-    socket.on('receive_message', (msg: ChatMessage) => {
-      if (msg.bookingId === bookingId) {
-        setMessages((prev) => {
-          const exists = prev.some((m) => m._id === msg._id || (m.createdAt === msg.createdAt && m.text === msg.text && m.imageUrl === msg.imageUrl));
-          if (exists) return prev;
-          return [...prev, msg];
-        });
-      }
-    });
-
-    socket.on('delete_message', (data: { bookingId: string; msgId: string }) => {
-      if (data.bookingId === bookingId) {
-        setMessages((prev) => prev.filter((m) => m._id !== data.msgId));
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    const interval = setInterval(fetchMessages, 2500);
+    return () => clearInterval(interval);
   }, [bookingId]);
 
   const handleSendText = async () => {
