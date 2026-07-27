@@ -6,14 +6,14 @@ import { Platform } from 'react-native';
  * - Mobile/Production: uses Render live server
  */
 const getBaseURL = (): string => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  if ((Platform.OS as string) === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
       return `http://${hostname}:5001`;
     }
   }
-  if (__DEV__) {
-    return 'http://localhost:5001';
+  if (Platform.OS === 'android' && __DEV__) {
+    return 'http://10.0.2.2:5001';
   }
   return 'https://apps-pnsk.onrender.com';
 };

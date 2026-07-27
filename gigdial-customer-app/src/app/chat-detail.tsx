@@ -141,7 +141,7 @@ export default function ChatDetailScreen() {
       let lng = 72.5714;
       let locName = 'Customer Live Location';
 
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
+      if ((Platform.OS as string) === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             lat = pos.coords.latitude;
@@ -189,7 +189,7 @@ export default function ChatDetailScreen() {
     setShowAttachMenu(false);
 
     try {
-      if (Platform.OS === 'web') {
+      if ((Platform.OS as string) === 'web') {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
@@ -260,11 +260,28 @@ export default function ChatDetailScreen() {
         } as any);
         formData.append('folder', 'chat_images');
 
-        const res = await fetch(`${LOCAL_API_URL}/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
+        let data: any;
+        if ((Platform.OS as string) === 'web') {
+          const res = await fetch(`${LOCAL_API_URL}/upload`, {
+            method: 'POST',
+            body: formData,
+          });
+          data = await res.json();
+        } else {
+          data = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${LOCAL_API_URL}/upload`);
+            xhr.onload = () => {
+              try {
+                resolve(JSON.parse(xhr.responseText));
+              } catch (e) {
+                reject(e);
+              }
+            };
+            xhr.onerror = (e) => reject(e);
+            xhr.send(formData);
+          });
+        }
         const cloudUrl = data.url || data.secure_url;
         await sendImageMsg(cloudUrl || base64Uri);
       } catch (err) {
@@ -352,7 +369,7 @@ export default function ChatDetailScreen() {
               </View>
 
               {/* Embedded Google Map Preview */}
-              {Platform.OS === 'web' ? (
+              {(Platform.OS as string) === 'web' ? (
                 <View style={styles.mapIframeWrapper}>
                   <iframe
                     title="Google Map Live Location"

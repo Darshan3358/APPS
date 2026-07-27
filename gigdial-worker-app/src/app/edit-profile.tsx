@@ -65,7 +65,7 @@ export default function EditProfileScreen() {
     }
 
     try {
-      if (Platform.OS === 'web') {
+      if ((Platform.OS as string) === 'web') {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';

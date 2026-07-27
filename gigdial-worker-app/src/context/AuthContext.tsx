@@ -225,44 +225,82 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       formData.append('additionalSkills', JSON.stringify(skills));
 
       // Append files
-      if (Platform.OS === 'web') {
+      if ((Platform.OS as string) === 'web') {
         if (aadhaarFileWeb) formData.append('aadhaarCard', aadhaarFileWeb);
         if (panFileWeb) formData.append('panCard', panFileWeb);
       } else {
         if (aadhaarUri) {
-          const fileUri = aadhaarUri.startsWith('file://') || aadhaarUri.startsWith('data:') || aadhaarUri.startsWith('content:') 
-            ? aadhaarUri 
-            : `file://${aadhaarUri}`;
-          const aadhaarName = aadhaarUri.split('/').pop() || 'aadhaar.jpg';
+          let fileUri = aadhaarUri;
+          if (aadhaarFileWeb && aadhaarFileWeb.uri && !aadhaarFileWeb.uri.startsWith('data:')) {
+            fileUri = aadhaarFileWeb.uri;
+          }
+          if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
+            fileUri = `file://${fileUri}`;
+          }
+          const fileName = (aadhaarFileWeb && aadhaarFileWeb.name) || fileUri.split('/').pop() || 'aadhaar.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = (aadhaarFileWeb && aadhaarFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
+
           formData.append('aadhaarCard', {
             uri: fileUri,
-            name: aadhaarName,
-            type: 'image/jpeg'
+            name: fileName,
+            type: fileType
           } as any);
         }
         if (panUri) {
-          const fileUri = panUri.startsWith('file://') || panUri.startsWith('data:') || panUri.startsWith('content:') 
-            ? panUri 
-            : `file://${panUri}`;
-          const panName = panUri.split('/').pop() || 'pan.jpg';
+          let fileUri = panUri;
+          if (panFileWeb && panFileWeb.uri && !panFileWeb.uri.startsWith('data:')) {
+            fileUri = panFileWeb.uri;
+          }
+          if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
+            fileUri = `file://${fileUri}`;
+          }
+          const fileName = (panFileWeb && panFileWeb.name) || fileUri.split('/').pop() || 'pan.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = (panFileWeb && panFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
+
           formData.append('panCard', {
             uri: fileUri,
-            name: panName,
-            type: 'image/jpeg'
+            name: fileName,
+            type: fileType
           } as any);
         }
       }
 
-      const res = await fetch(`${LOCAL_API_URL}/auth/register/step3`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
-      
-      const resData = await res.json();
-      if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
+      let resData: any;
+      if ((Platform.OS as string) === 'web') {
+        const res = await fetch(`${LOCAL_API_URL}/auth/register/step3`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        resData = await res.json();
+        if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
+      } else {
+        resData = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${LOCAL_API_URL}/auth/register/step3`);
+          xhr.setRequestHeader('Accept', 'application/json');
+          xhr.onload = () => {
+            try {
+              const parsed = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(parsed);
+              } else {
+                reject(new Error(parsed.error || `Step 3 failed (${xhr.status})`));
+              }
+            } catch (e) {
+              reject(new Error(xhr.responseText || 'Step 3 failed'));
+            }
+          };
+          xhr.onerror = () => {
+            reject(new Error('Network request failed. Please check backend connection.'));
+          };
+          xhr.send(formData);
+        });
+      }
 
       if (resData.otpRequired) {
         return { success: true, otpRequired: true, email: resData.email };

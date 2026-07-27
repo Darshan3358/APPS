@@ -314,7 +314,7 @@ export default function BookScreen() {
       const data = await res.json();
       if (res.ok) {
         showToast('Booking request sent successfully!', 'success');
-        if (Platform.OS === 'web') {
+        if ((Platform.OS as string) === 'web') {
           setTimeout(() => {
             setStep(1);
             setSelectedWorker(null);
@@ -334,13 +334,13 @@ export default function BookScreen() {
         }
       } else {
         showToast(data.error || 'Failed to create booking.', 'error');
-        if (Platform.OS !== 'web') {
+        if ((Platform.OS as string) !== 'web') {
           Alert.alert('Error', data.error || 'Failed to create booking.');
         }
       }
     } catch (err: any) {
       showToast(err.message || 'Connection error.', 'error');
-      if (Platform.OS !== 'web') {
+      if ((Platform.OS as string) !== 'web') {
         Alert.alert('Error', err.message || 'Connection error.');
       }
     } finally {

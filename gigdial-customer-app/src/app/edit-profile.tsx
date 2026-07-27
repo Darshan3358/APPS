@@ -51,7 +51,7 @@ export default function EditProfileScreen() {
 
   const pickImageFromGallery = async () => {
     try {
-      if (Platform.OS === 'web') {
+      if ((Platform.OS as string) === 'web') {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
@@ -111,18 +111,44 @@ export default function EditProfileScreen() {
       const filename = asset.uri.split('/').pop() || `profile_${Date.now()}.jpg`;
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
+      const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+        ? `file://${asset.uri}`
+        : asset.uri;
+
       formData.append('file', {
-        uri: asset.uri,
+        uri: fileUri,
         name: filename,
         type: asset.mimeType || type,
       } as any);
       formData.append('folder', 'customer_profiles');
 
-      const res = await fetch(`${LOCAL_API_URL}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
+      let data: any;
+      if ((Platform.OS as string) === 'web') {
+        const res = await fetch(`${LOCAL_API_URL}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        data = await res.json();
+      } else {
+        data = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${LOCAL_API_URL}/upload`);
+          xhr.onload = () => {
+            try {
+              const parsed = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(parsed);
+              } else {
+                reject(new Error(parsed.error || `Upload failed (${xhr.status})`));
+              }
+            } catch (e) {
+              reject(e);
+            }
+          };
+          xhr.onerror = () => reject(new Error('Network error uploading photo'));
+          xhr.send(formData);
+        });
+      }
       if (data.url || data.secure_url) {
         setSelectedPhoto(data.url || data.secure_url);
         Alert.alert('Success', 'Profile photo uploaded!');

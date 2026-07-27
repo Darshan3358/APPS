@@ -77,7 +77,7 @@ export default function RegisterStep3() {
   };
 
   const handlePickAadhaar = async () => {
-    if (Platform.OS === 'web') {
+    if ((Platform.OS as string) === 'web') {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*,application/pdf';
@@ -99,16 +99,21 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.8,
-          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
-          const uriToUse = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-          setAadhaarUri(uriToUse);
+          const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+            ? `file://${asset.uri}`
+            : asset.uri;
+          const fileName = asset.fileName || asset.uri.split('/').pop() || 'aadhaar.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
+
+          setAadhaarUri(fileUri);
           setAadhaarFile({
-            uri: uriToUse,
-            name: asset.uri.split('/').pop() || 'aadhaar.jpg',
-            type: asset.mimeType || 'image/jpeg'
+            uri: fileUri,
+            name: fileName,
+            type: fileType
           });
         }
       } catch (err: any) {
@@ -118,7 +123,7 @@ export default function RegisterStep3() {
   };
 
   const handlePickPan = async () => {
-    if (Platform.OS === 'web') {
+    if ((Platform.OS as string) === 'web') {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*,application/pdf';
@@ -140,16 +145,21 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.8,
-          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
-          const uriToUse = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-          setPanUri(uriToUse);
+          const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+            ? `file://${asset.uri}`
+            : asset.uri;
+          const fileName = asset.fileName || asset.uri.split('/').pop() || 'pan.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
+
+          setPanUri(fileUri);
           setPanFile({
-            uri: uriToUse,
-            name: asset.uri.split('/').pop() || 'pan.jpg',
-            type: asset.mimeType || 'image/jpeg'
+            uri: fileUri,
+            name: fileName,
+            type: fileType
           });
         }
       } catch (err: any) {

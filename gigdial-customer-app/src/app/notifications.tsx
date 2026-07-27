@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    ...(Platform.OS === 'web' ? { paddingTop: 20 } : {}),
+    ...((Platform.OS as string) === 'web' ? { paddingTop: 20 } : {}),
   },
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
