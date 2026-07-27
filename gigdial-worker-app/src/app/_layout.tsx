@@ -58,7 +58,7 @@ function categoryMatchesLead(workerCategoryString: string, leadTitle: string, le
 }
 
 function AppContent() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
   const [activeToast, setActiveToast] = useState<{
     title: string;
