@@ -1705,8 +1705,8 @@ app.post('/api/customer/profile', async (req, res) => {
   }
 });
 
-// Get bookings for a customer
-app.get('/api/customer/bookings', async (req, res) => {
+// Legacy Get bookings for a customer by query name
+app.get('/api/customer/bookings/search', async (req, res) => {
   try {
     const { customerName } = req.query;
     if (!customerName) return res.status(400).json({ error: "customerName query required" });
