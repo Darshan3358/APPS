@@ -162,8 +162,8 @@ export default function DashboardScreen() {
 
   const handleCategoryPress = (category: string) => {
     router.push({
-      pathname: '/(tabs)/book',
-      params: { selectedCategory: category }
+      pathname: '/all-professionals',
+      params: { category: category }
     });
   };
 

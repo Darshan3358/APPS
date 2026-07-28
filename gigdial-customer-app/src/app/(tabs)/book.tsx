@@ -249,17 +249,34 @@ export default function BookScreen() {
     }
   };
 
+  const isServiceMatch = (workerProf: string = '', cat: string = '', skills: string[] = []) => {
+    if (!cat) return true;
+    const wProf = workerProf.toLowerCase();
+    const target = cat.toLowerCase();
+    const allSkills = (skills || []).map(s => s.toLowerCase()).join(' ');
+
+    if (wProf.includes(target) || target.includes(wProf)) return true;
+    if (allSkills.includes(target)) return true;
+
+    if ((target.includes('plumb') || target.includes('water')) && (wProf.includes('plumb') || allSkills.includes('plumb'))) return true;
+    if ((target.includes('electr') || target.includes('light')) && (wProf.includes('electr') || allSkills.includes('electr'))) return true;
+    if ((target.includes('paint') || target.includes('deco')) && (wProf.includes('paint') || allSkills.includes('paint'))) return true;
+    if ((target.includes('carpent') || target.includes('wood') || target.includes('furniture') || target.includes('marramat')) && (wProf.includes('carpent') || allSkills.includes('carpent'))) return true;
+    if ((target.includes('clean') || target.includes('pest') || target.includes('housekeeping')) && (wProf.includes('clean') || allSkills.includes('clean'))) return true;
+    if ((target.includes('ac') || target.includes('appliance')) && (wProf.includes('ac') || wProf.includes('electr') || allSkills.includes('ac'))) return true;
+
+    return false;
+  };
+
   const fetchWorkers = async () => {
     setLoadingWorkers(true);
     try {
       const res = await fetch(`${LOCAL_API_URL}/customer/workers`);
       if (res.ok) {
         const data: Worker[] = await res.json();
-        // Filter workers by selected category
-        const filtered = data.filter(w => 
-          w.profession.toLowerCase() === category.toLowerCase()
-        );
-        setWorkers(filtered.length > 0 ? filtered : data); // Fallback to all if none in category
+        // Filter workers strictly by selected category
+        const filtered = data.filter(w => isServiceMatch(w.profession, category, (w as any).skills));
+        setWorkers(filtered);
       }
     } catch (err) {
       console.error('Failed to load workers:', err);

@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   TextInput, SafeAreaView, Image, ActivityIndicator, StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL as LOCAL_API_URL } from '../config/api';
 
@@ -39,6 +39,10 @@ const STAR_FILTERS = [
 
 export default function AllProfessionalsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ category?: string; service?: string; selectedCategory?: string }>();
+  const [selectedServiceCategory, setSelectedServiceCategory] = useState<string>(
+    params.category || params.service || params.selectedCategory || ''
+  );
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -73,12 +77,32 @@ export default function AllProfessionalsScreen() {
     }
   };
 
+  const isServiceMatch = (workerProf: string = '', cat: string = '', skills: string[] = []) => {
+    if (!cat) return true;
+    const wProf = workerProf.toLowerCase();
+    const target = cat.toLowerCase();
+    const allSkills = (skills || []).map(s => s.toLowerCase()).join(' ');
+
+    if (wProf.includes(target) || target.includes(wProf)) return true;
+    if (allSkills.includes(target)) return true;
+
+    if ((target.includes('plumb') || target.includes('water')) && (wProf.includes('plumb') || allSkills.includes('plumb'))) return true;
+    if ((target.includes('electr') || target.includes('light')) && (wProf.includes('electr') || allSkills.includes('electr'))) return true;
+    if ((target.includes('paint') || target.includes('deco')) && (wProf.includes('paint') || allSkills.includes('paint'))) return true;
+    if ((target.includes('carpent') || target.includes('wood') || target.includes('furniture') || target.includes('marramat')) && (wProf.includes('carpent') || allSkills.includes('carpent'))) return true;
+    if ((target.includes('clean') || target.includes('pest') || target.includes('housekeeping')) && (wProf.includes('clean') || allSkills.includes('clean'))) return true;
+    if ((target.includes('ac') || target.includes('appliance')) && (wProf.includes('ac') || wProf.includes('electr') || allSkills.includes('ac'))) return true;
+
+    return false;
+  };
+
   const filtered = workers.filter((w) => {
+    const matchCategory = isServiceMatch(w.profession, selectedServiceCategory, w.skills);
     const matchSearch =
       w.name.toLowerCase().includes(search.toLowerCase()) ||
       w.profession.toLowerCase().includes(search.toLowerCase());
     const matchRating = w.rating >= minRating;
-    return matchSearch && matchRating;
+    return matchCategory && matchSearch && matchRating;
   });
 
   const handleBook = (worker: Worker) => {
@@ -157,6 +181,16 @@ export default function AllProfessionalsScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Active Selected Service Category Tag */}
+      {selectedServiceCategory ? (
+        <View style={styles.activeServiceBanner}>
+          <Text style={styles.activeServiceText}>Service: {selectedServiceCategory}</Text>
+          <TouchableOpacity onPress={() => setSelectedServiceCategory('')} style={styles.clearServiceBtn}>
+            <Ionicons name="close-circle" size={16} color="#0F2C59" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Rating Filter */}
       <View style={styles.filterRow}>
@@ -421,5 +455,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  activeServiceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginLeft: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  activeServiceText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0369A1',
+    marginRight: 6,
+  },
+  clearServiceBtn: {
+    padding: 2,
   },
 });

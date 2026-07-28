@@ -130,8 +130,8 @@ export default function ServicesScreen() {
 
   const handleCategoryPress = (categoryName: string) => {
     router.push({
-      pathname: '/(tabs)/book',
-      params: { selectedCategory: categoryName }
+      pathname: '/all-professionals',
+      params: { category: categoryName }
     });
   };
 
