@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/styles/theme';
 import CustomChart from '@/components/CustomChart';
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
 
 interface DashboardOverviewProps {
   stats: any;
@@ -28,6 +29,8 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
+
   const isWide = width >= 1200;
   const isMobile = width < 768;
   const isSmall = width < 400;
@@ -35,31 +38,39 @@ export default function DashboardOverview({
   
   const tabBarHeight = Platform.OS === 'ios' ? 76 : 60;
   const bottomPadding = tabBarHeight + insets.bottom + 20;
+
+  // Filter dataset by selected date range
+  const filteredBookings = filterByDateRange(bookings, (item) => item.createdAt || item.date, dateFilter);
+  const filteredWorkers = filterByDateRange(workers, (item) => item.createdAt || item.joinedDate, dateFilter);
+  const filteredUsers = filterByDateRange(users, (item) => item.createdAt || item.joinedDate, dateFilter);
+  const filteredSubscriptions = filterByDateRange(subscriptions, (item) => item.createdAt || item.startDate, dateFilter);
+  const filteredPayments = filterByDateRange(payments, (item) => item.createdAt || item.date, dateFilter);
+  const filteredReviews = filterByDateRange(reviews, (item) => item.createdAt || item.date, dateFilter);
   
-  // Real dynamic calculations based on database arrays
-  const totalProfessionals = workers.length;
-  const verifiedProfessionals = workers.filter(w => w.isApproved).length;
-  const pendingApproval = workers.filter(w => !w.isApproved).length;
-  const blockedProfessionals = users.filter(u => u.role === 'worker' && u.isBlocked).length;
+  // Real dynamic calculations based on filtered arrays
+  const totalProfessionals = filteredWorkers.length;
+  const verifiedProfessionals = filteredWorkers.filter(w => w.isApproved).length;
+  const pendingApproval = filteredWorkers.filter(w => !w.isApproved).length;
+  const blockedProfessionals = filteredUsers.filter(u => u.role === 'worker' && u.isBlocked).length;
   
-  const totalCustomers = users.filter(u => u.role !== 'worker' && !u.isAdmin).length;
+  const totalCustomers = filteredUsers.filter(u => u.role !== 'worker' && !u.isAdmin).length;
   
   // Filter today's bookings
   const todayStr = new Date().toDateString();
-  const todaysLeads = bookings.filter(b => {
+  const todaysLeads = filteredBookings.filter(b => {
     if (!b.createdAt) return false;
     return new Date(b.createdAt).toDateString() === todayStr;
   }).length;
 
-  const activeSubscriptions = subscriptions.filter(s => s.status === 'Active' || s.status === 'approved').length;
-  const expiredSubscriptions = subscriptions.filter(s => s.status === 'Expired' || s.status === 'rejected').length;
+  const activeSubscriptions = filteredSubscriptions.filter(s => s.status === 'Active' || s.status === 'approved').length;
+  const expiredSubscriptions = filteredSubscriptions.filter(s => s.status === 'Expired' || s.status === 'rejected').length;
 
-  const totalRevenue = payments
+  const totalRevenue = filteredPayments
     .filter(p => p.status === 'Success')
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-  const pendingVerification = workers.filter(w => !w.isApproved && (w.aadhaarCard || w.panCard)).length;
-  const newReviews = reviews.length;
+  const pendingVerification = filteredWorkers.filter(w => !w.isApproved && (w.aadhaarCard || w.panCard)).length;
+  const newReviews = filteredReviews.length;
 
   // Formatting currency
   const formatCurrency = (val: number) => {
@@ -156,6 +167,8 @@ export default function DashboardOverview({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}>
+      <DateFilter value={dateFilter} onChange={setDateFilter} />
+
       {/* Grid List of 11 stat cards */}
       <View style={styles.gridContainer}>
         {statItems.map((item, index) => (

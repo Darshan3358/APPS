@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/styles/theme';
 import { API_URL } from '@/api';
 
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
+
 interface WorkerRequest {
   _id: string;
   name: string;
@@ -23,6 +25,8 @@ interface WorkerRequest {
   aadhaarCard?: string;
   panCard?: string;
   isApproved: boolean;
+  createdAt?: string;
+  joinedDate?: string;
 }
 
 interface VerificationPanelProps {
@@ -41,6 +45,7 @@ export default function VerificationPanel({
   const [activeTab, setActiveTab] = useState<TabType>('Pending');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [dropdownId, setDropdownId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
   const serverRoot = API_URL.replace('/api', '');
 
@@ -54,7 +59,9 @@ export default function VerificationPanel({
     return `${serverRoot}/${cleanPath}`;
   };
 
-  const filtered = workers.filter((w) => {
+  const dateFilteredWorkers = filterByDateRange(workers, (w) => w.createdAt || w.joinedDate, dateFilter);
+
+  const filtered = dateFilteredWorkers.filter((w) => {
     if (activeTab === 'Pending') return !w.isApproved;
     if (activeTab === 'Verified') return w.isApproved;
     if (activeTab === 'Rejected') return false;
@@ -68,6 +75,8 @@ export default function VerificationPanel({
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
+
         {/* Filter Pills */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabsContent}>
           {(['All', 'Pending', 'Verified', 'Rejected'] as TabType[]).map((tab) => {

@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/styles/theme';
 import { API_URL } from '@/api';
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
 
 interface CustomerData {
   _id: string;
@@ -23,6 +24,8 @@ interface CustomerData {
   profilePhoto?: string;
   isBlocked: boolean;
   role?: string;
+  createdAt?: string;
+  joinedDate?: string;
 }
 
 interface CustomerManagementProps {
@@ -39,6 +42,7 @@ export default function CustomerManagement({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerData | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
   // Filter States
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -48,20 +52,19 @@ export default function CustomerManagement({
   const serverRoot = API_URL.replace('/api', '');
 
   const getPhotoUri = (photo: string | undefined, name?: string): string => {
-    if (!photo || photo.includes('default-avatar') || photo.startsWith('assets/')) {
-      const displayName = name || 'Customer';
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0F2C59&color=fff&bold=true`;
+    if (!photo || photo.includes('default-avatar.png')) {
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Customer')}&background=0F2C59&color=fff`;
     }
-    if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
-    const cleanPath = photo.startsWith('/') ? photo.substring(1) : photo;
-    return `${serverRoot}/${cleanPath}`;
+    if (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:')) {
+      return photo;
+    }
+    const cleanPhoto = photo.startsWith('/') ? photo : `/${photo}`;
+    return `${serverRoot}${cleanPhoto}`;
   };
 
-  const uniqueCities = Array.from(
-    new Set(customers.map((c) => c.city || 'Mumbai').filter(Boolean))
-  );
+  const dateFilteredCustomers = filterByDateRange(customers, (c) => c.createdAt || c.joinedDate, dateFilter);
 
-  const filteredCustomers = customers.filter((c) => {
+  const filteredCustomers = dateFilteredCustomers.filter((c) => {
     // Only show customer role to exclude workers/admins
     const role = (c.role || 'customer').toLowerCase();
     if (role !== 'customer') return false;
@@ -89,6 +92,10 @@ export default function CustomerManagement({
     return true;
   });
 
+  const uniqueCities = Array.from(
+    new Set(customers.map((c) => c.city || 'Mumbai').filter(Boolean))
+  );
+
   const activeFilterCount = 
     (blockFilter !== 'All' ? 1 : 0) +
     (cityFilter !== 'All' ? 1 : 0);
@@ -96,6 +103,8 @@ export default function CustomerManagement({
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
+
         {/* Search & Filter */}
         <View style={styles.searchRow}>
           <View style={styles.searchContainer}>

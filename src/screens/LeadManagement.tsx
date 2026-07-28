@@ -10,6 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/styles/theme';
 
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
+
 interface BookingRecord {
   _id: string;
   customerName: string;
@@ -38,6 +40,7 @@ export default function LeadManagement({ bookings, onUpdateStatus }: LeadManagem
   // Details Modal State
   const [selectedLead, setSelectedLead] = useState<BookingRecord | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
   // Filter States
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -49,7 +52,9 @@ export default function LeadManagement({ bookings, onUpdateStatus }: LeadManagem
     new Set(bookings.map((b) => b.serviceName).filter(Boolean))
   );
 
-  const filtered = bookings.filter((b) => {
+  const dateFilteredBookings = filterByDateRange(bookings, (b) => b.createdAt || b.date, dateFilter);
+
+  const filtered = dateFilteredBookings.filter((b) => {
     // Tab status filter
     const s = b.status.toLowerCase();
     if (activeTab === 'New' && s !== 'new' && s !== 'pending') return false;
@@ -92,6 +97,8 @@ export default function LeadManagement({ bookings, onUpdateStatus }: LeadManagem
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
+
         {/* Search & Filter Row */}
         <View style={styles.searchRow}>
           <View style={{ flex: 1 }} />

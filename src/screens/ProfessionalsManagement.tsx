@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/styles/theme';
 import { API_URL } from '@/api';
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
 
 interface ProfessionalData {
   _id: string;
@@ -28,6 +29,8 @@ interface ProfessionalData {
   panCard?: string;
   role?: string;
   isBlocked?: boolean;
+  createdAt?: string;
+  joinedDate?: string;
 }
 
 interface ProfessionalsManagementProps {
@@ -49,6 +52,7 @@ export default function ProfessionalsManagement({
   const [selectedWorker, setSelectedWorker] = useState<ProfessionalData | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
   // Filter States
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -59,16 +63,16 @@ export default function ProfessionalsManagement({
   const serverRoot = API_URL.replace('/api', '');
 
   const getPhotoUri = (photo: string | undefined, name?: string): string => {
-    if (!photo || photo.includes('default-avatar') || photo.startsWith('assets/')) {
-      const displayName = name || 'Professional';
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0F2C59&color=fff&bold=true`;
+    if (!photo || photo.includes('default-avatar.png')) {
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Worker')}&background=0F2C59&color=fff`;
     }
-    if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
-    const cleanPath = photo.startsWith('/') ? photo.substring(1) : photo;
-    return `${serverRoot}/${cleanPath}`;
+    if (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:')) {
+      return photo;
+    }
+    const cleanPhoto = photo.startsWith('/') ? photo : `/${photo}`;
+    return `${serverRoot}${cleanPhoto}`;
   };
 
-  // Get dynamic unique cities
   const uniqueCities = Array.from(
     new Set(workers.map((w) => w.city || 'Mumbai').filter(Boolean))
   );
@@ -118,6 +122,8 @@ export default function ProfessionalsManagement({
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
+
         {/* Search & Filter */}
         <View style={styles.searchRow}>
           <View style={styles.searchContainer}>

@@ -12,6 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/styles/theme';
 
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
+
 export interface FeedbackRecord {
   _id: string;
   rating: number;
@@ -32,8 +34,11 @@ type TabType = 'All' | 'Bug' | 'Feedback' | 'Feature Request' | 'Other';
 export default function FeedbackManagement({ feedbacks, onDeleteFeedback }: FeedbackManagementProps) {
   const [activeTab, setActiveTab] = useState<TabType>('All');
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackRecord | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
-  const filtered = feedbacks.filter((f) => {
+  const dateFiltered = filterByDateRange(feedbacks, (f) => f.createdAt, dateFilter);
+
+  const filtered = dateFiltered.filter((f) => {
     if (activeTab === 'All') return true;
     return (f.feedbackType || '').toLowerCase() === activeTab.toLowerCase();
   });
@@ -82,6 +87,8 @@ export default function FeedbackManagement({ feedbacks, onDeleteFeedback }: Feed
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <DateFilter value={dateFilter} onChange={setDateFilter} />
+
       {/* Summary Cards */}
       <View style={styles.summaryContainer}>
         <View style={styles.summaryCard}>

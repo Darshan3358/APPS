@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/styles/theme';
 import StatusPill from '@/components/StatusPill';
 import { BookingData } from '@/constants/mockData';
+import DateFilter, { filterByDateRange, DateFilterState } from '@/components/DateFilter';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -98,8 +99,10 @@ function BookingRow({
                   style={[styles.actionChip, styles.chipRed]}
                   onPress={() => onUpdateStatus(booking._id, 'cancelled')}
                 >
-                  <Ionicons name="close-outline" size={14} color={theme.colors.dangerRed} />
-                  <Text style={[styles.chipText, { color: theme.colors.dangerRed }]}>Cancel</Text>
+                  <Ionicons name="close-outline" size={14} color={theme.colors.danger.text} />
+                  <Text style={[styles.chipText, { color: theme.colors.danger.text }]}>
+                    Cancel
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -112,8 +115,11 @@ function BookingRow({
 
 export default function BookingsScreen({ bookings, onUpdateStatus }: BookingsScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
-  const filteredBookings = bookings.filter((b) => {
+  const dateFilteredBookings = filterByDateRange(bookings, (item) => (item as any).createdAt || item.date, dateFilter);
+
+  const filteredBookings = dateFilteredBookings.filter((b) => {
     const q = searchQuery.toLowerCase();
     const id = b._id ? String(b._id).toLowerCase() : '';
     const customer = b.customerName ? String(b.customerName).toLowerCase() : '';
@@ -125,6 +131,8 @@ export default function BookingsScreen({ bookings, onUpdateStatus }: BookingsScr
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <Text style={styles.screenHeader}>Manage Bookings</Text>
+
+      <DateFilter value={dateFilter} onChange={setDateFilter} />
 
       {/* Search Bar */}
       <View style={styles.searchBarContainer}>

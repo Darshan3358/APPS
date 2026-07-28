@@ -111,7 +111,9 @@ export default function AppContainer() {
       setStats(statsData);
       setIsConnected(true);
 
-      // Fetch all endpoints in parallel
+      // Fetch all endpoints in parallel with error catchers
+      const safeFetch = (url: string) => fetch(url).catch(() => ({ ok: false } as Response));
+
       const [
         allUsersRes,
         usersRes,
@@ -127,19 +129,19 @@ export default function AppContainer() {
         paymentsRes,
         feedbacksRes
       ] = await Promise.all([
-        fetch(`${API_BASE_URL}/users/all`),
-        fetch(`${API_BASE_URL}/users`),
-        fetch(`${API_BASE_URL}/workers`),
-        fetch(`${API_BASE_URL}/bookings`),
-        fetch(`${API_BASE_URL}/subscriptions`),
-        fetch(`${API_BASE_URL}/settings`),
-        fetch(`${API_BASE_URL}/subscription/requests`),
-        fetch(`${API_BASE_URL}/reviews`),
-        fetch(`${API_BASE_URL}/support/tickets`),
-        fetch(`${API_BASE_URL}/banners`),
-        fetch(`${API_BASE_URL}/blogs/admin`),
-        fetch(`${API_BASE_URL}/payments`),
-        fetch(`${API_BASE_URL}/feedbacks`),
+        safeFetch(`${API_BASE_URL}/users/all`),
+        safeFetch(`${API_BASE_URL}/users`),
+        safeFetch(`${API_BASE_URL}/workers`),
+        safeFetch(`${API_BASE_URL}/bookings`),
+        safeFetch(`${API_BASE_URL}/subscriptions`),
+        safeFetch(`${API_BASE_URL}/settings`),
+        safeFetch(`${API_BASE_URL}/subscription/requests`),
+        safeFetch(`${API_BASE_URL}/reviews`),
+        safeFetch(`${API_BASE_URL}/support/tickets`),
+        safeFetch(`${API_BASE_URL}/banners`),
+        safeFetch(`${API_BASE_URL}/blogs/admin`),
+        safeFetch(`${API_BASE_URL}/payments`),
+        safeFetch(`${API_BASE_URL}/feedbacks`),
       ]);
 
       if (allUsersRes.ok) setAllUsers(await allUsersRes.json());
