@@ -47,10 +47,14 @@ export default function CustomerManagement({
 
   const serverRoot = API_URL.replace('/api', '');
 
-  const getPhotoUri = (photo: string | undefined): string => {
-    if (!photo) return `${serverRoot}/uploads/default-avatar.png`;
+  const getPhotoUri = (photo: string | undefined, name?: string): string => {
+    if (!photo || photo.includes('default-avatar') || photo.startsWith('assets/')) {
+      const displayName = name || 'Customer';
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0F2C59&color=fff&bold=true`;
+    }
     if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
-    return `${serverRoot}/${photo.startsWith('/') ? photo.substring(1) : photo}`;
+    const cleanPath = photo.startsWith('/') ? photo.substring(1) : photo;
+    return `${serverRoot}/${cleanPath}`;
   };
 
   const uniqueCities = Array.from(
@@ -130,7 +134,7 @@ export default function CustomerManagement({
           ) : (
             filteredCustomers.map((c) => (
               <View key={c._id} style={styles.card}>
-                <Image source={{ uri: getPhotoUri(c.profilePhoto) }} style={styles.avatar} />
+                <Image source={{ uri: getPhotoUri(c.profilePhoto, c.name) }} style={styles.avatar} />
                 <View style={styles.infoContainer}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <Text style={styles.nameText}>{c.name || '—'}</Text>

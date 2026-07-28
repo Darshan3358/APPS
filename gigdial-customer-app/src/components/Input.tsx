@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E8EC',
     borderRadius: 14,
     paddingHorizontal: 16,
-    height: 54,
+    minHeight: 52,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   multilineWrapper: {
-    height: 100,
+    minHeight: 100,
     alignItems: 'flex-start',
     paddingVertical: 12,
   },
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#1A1A1A',
     fontSize: 15,
-    height: '100%',
+    paddingVertical: 8,
   },
   multilineInput: {
     height: '100%',

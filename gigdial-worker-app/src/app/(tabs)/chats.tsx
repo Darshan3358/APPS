@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Image, StatusBar, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Image, StatusBar, TextInput, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,8 @@ interface ChatThread {
   lastMessage: string;
   timestamp: string;
   updatedAt: number;
+  bookingStatus?: string;
+  workerHasSubscription?: boolean;
 }
 
 export default function ChatsTab() {
@@ -111,31 +113,54 @@ export default function ChatsTab() {
               <Text style={styles.emptySubText}>When customers message you for booked jobs, they will appear here.</Text>
             </View>
           ) : (
-            filteredThreads.map((thread) => (
-              <TouchableOpacity 
-                key={thread.bookingId} 
-                style={styles.threadItem}
-                onPress={() => router.push({
+            filteredThreads.map((thread) => {
+              const isLocked = thread.bookingStatus === 'Pending' || thread.workerHasSubscription === false;
+
+              const handleThreadPress = () => {
+                router.push({
                   pathname: '/chat-detail',
                   params: { bookingId: thread.bookingId, title: thread.jobTitle }
-                })}
-              >
-                {/* Avatar */}
-                <Image 
-                  source={{ uri: getProfilePhotoUri(thread.customerPhoto, thread.customerName) }}
-                  style={styles.avatar}
-                />
+                });
+              };
 
-                <View style={styles.threadContent}>
-                  <View style={styles.threadHeader}>
-                    <Text style={styles.customerName}>{thread.customerName}</Text>
-                    <Text style={styles.timestamp}>{thread.timestamp}</Text>
+              return (
+                <TouchableOpacity 
+                  key={thread.bookingId} 
+                  style={[styles.threadItem, isLocked && styles.threadItemLocked]}
+                  onPress={handleThreadPress}
+                >
+                  {/* Avatar Container with Lock Badge */}
+                  <View style={{ position: 'relative' }}>
+                    <Image 
+                      source={{ uri: getProfilePhotoUri(thread.customerPhoto, thread.customerName) }}
+                      style={styles.avatar}
+                    />
+                    {isLocked && (
+                      <View style={styles.avatarLockBadge}>
+                        <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.jobTitle} numberOfLines={1}>{thread.jobTitle}</Text>
-                  <Text style={styles.lastMessage} numberOfLines={1}>{thread.lastMessage}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
+
+                  <View style={styles.threadContent}>
+                    <View style={styles.threadHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.customerName}>{thread.customerName}</Text>
+                        {isLocked && <Ionicons name="lock-closed" size={14} color="#E11D48" />}
+                      </View>
+                      <Text style={styles.timestamp}>{thread.timestamp}</Text>
+                    </View>
+                    <Text style={styles.jobTitle} numberOfLines={1}>{thread.jobTitle}</Text>
+                    <Text style={[styles.lastMessage, isLocked && styles.lockedMessageText]} numberOfLines={1}>
+                      {isLocked 
+                        ? (thread.workerHasSubscription === false ? '🔒 Active Subscription required to chat' : '🔒 Accept lead to unlock chat')
+                        : thread.lastMessage
+                      }
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
         </ScrollView>
       )}
@@ -265,5 +290,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     marginTop: 4,
+  },
+  threadItemLocked: {
+    backgroundColor: '#FEF2F2',
+  },
+  avatarLockBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 12,
+    backgroundColor: '#E11D48',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  lockedMessageText: {
+    color: '#E11D48',
+    fontWeight: '600',
   },
 });

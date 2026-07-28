@@ -21,6 +21,9 @@ interface Booking {
   customerPhone?: string;
   rating?: number;
   review?: string;
+  cancelledBy?: string;
+  rejectedByWorker?: boolean;
+  rejectedBy?: string[];
 }
 
 function categoryMatchesLead(workerCategoryString: string, leadTitle: string, leadDescription: string): boolean {
@@ -62,9 +65,9 @@ export default function LeadsTab() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<'success' | 'error'>('error');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning'>('error');
 
-  const showToast = (message: string, type: 'success' | 'error' = 'error') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'error') => {
     setToastMessage(message);
     setToastType(type);
     setTimeout(() => {
@@ -93,28 +96,20 @@ export default function LeadsTab() {
         setSubscriptionActive(subData.isActive);
       }
 
-      // 1. Fetch Pending Leads
-      const pendRes = await fetch(`${LOCAL_API_URL}/bookings/pending`, {
+      // 1. Fetch Worker Leads directly from /worker/leads
+      const leadsRes = await fetch(`${LOCAL_API_URL}/worker/leads`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (pendRes.ok) {
-        const pendData = await pendRes.json();
-        const filtered = user.mainCategory 
-          ? pendData.filter((b: any) => {
-              if (b.workerId === user.id) return true;
-              return categoryMatchesLead(user.mainCategory!, b.title, b.description);
-            })
-          : pendData;
-        setPendingBookings(filtered);
-      }
-
-      // 2. Fetch Active & Completed Leads for worker
-      const activeRes = await fetch(`${LOCAL_API_URL}/bookings/active/${user.id}`);
-      if (activeRes.ok) {
-        const activeData = await activeRes.json();
-        setActiveBookings(activeData);
+      if (leadsRes.ok) {
+        const leadsData = await leadsRes.json();
+        if (Array.isArray(leadsData)) {
+          const pend = leadsData.filter((b: any) => (b.status || '').toLowerCase() === 'pending');
+          const active = leadsData.filter((b: any) => (b.status || '').toLowerCase() !== 'pending');
+          setPendingBookings(pend);
+          setActiveBookings(active);
+        }
       }
     } catch (err) {
       console.log('Error fetching leads:', err);
@@ -279,13 +274,13 @@ export default function LeadsTab() {
       return pendingBookings;
     }
     if (activeTab === 'active') {
-      return activeBookings.filter(b => ['accepted', 'on_the_way', 'in_progress'].includes(b.status));
+      return activeBookings.filter(b => ['accepted', 'on_the_way', 'in_progress'].includes((b.status || '').toLowerCase()));
     }
     if (activeTab === 'completed') {
-      return activeBookings.filter(b => b.status === 'completed');
+      return activeBookings.filter(b => (b.status || '').toLowerCase() === 'completed');
     }
     if (activeTab === 'cancelled') {
-      return activeBookings.filter(b => b.status === 'cancelled');
+      return activeBookings.filter(b => (b.status || '').toLowerCase() === 'cancelled');
     }
     return [];
   };
@@ -325,7 +320,7 @@ export default function LeadsTab() {
             onPress={() => setActiveTab('active')}
           >
             <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
-              Active ({activeBookings.filter(b => ['accepted', 'on_the_way', 'in_progress'].includes(b.status)).length})
+              Active ({activeBookings.filter(b => ['accepted', 'on_the_way', 'in_progress'].includes((b.status || '').toLowerCase())).length})
             </Text>
           </TouchableOpacity>
 
@@ -334,7 +329,7 @@ export default function LeadsTab() {
             onPress={() => setActiveTab('completed')}
           >
             <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
-              Completed
+              Completed ({activeBookings.filter(b => (b.status || '').toLowerCase() === 'completed').length})
             </Text>
           </TouchableOpacity>
 
@@ -343,7 +338,7 @@ export default function LeadsTab() {
             onPress={() => setActiveTab('cancelled')}
           >
             <Text style={[styles.tabText, activeTab === 'cancelled' && styles.activeTabText]}>
-              Cancelled
+              Cancelled ({activeBookings.filter(b => (b.status || '').toLowerCase() === 'cancelled').length})
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -375,11 +370,29 @@ export default function LeadsTab() {
                     {/* Card Title & Status Badge */}
                     <View style={styles.cardHeader}>
                       <Text style={styles.cardTitle}>{booking.title}</Text>
-                      <View style={[styles.statusBadge, { backgroundColor: activeTab === 'pending' ? '#FEF3C7' : statusColor + '15' }]}>
-                        <Text style={[styles.statusBadgeText, { color: activeTab === 'pending' ? '#D97706' : statusColor }]}>
-                          {booking.status.replace(/_/g, ' ').toUpperCase()}
-                        </Text>
-                      </View>
+                      {activeTab === 'cancelled' ? (
+                        (() => {
+                          const userIdStr = String(user?.id || (user as any)?._id || '');
+                          const rejectedList = Array.isArray(booking.rejectedBy) ? booking.rejectedBy.map(String) : [];
+                          const isRejectedByYou = booking.cancelledBy === 'worker' || booking.rejectedByWorker === true || rejectedList.includes(userIdStr);
+                          const label = isRejectedByYou ? 'REJECTED BY YOU' : `CANCELLED BY ${(booking.customerName || 'Customer').toUpperCase()}`;
+                          const badgeBg = isRejectedByYou ? '#FEE2E2' : '#FFEDD5';
+                          const badgeTextColor = isRejectedByYou ? '#DC2626' : '#C2410C';
+                          return (
+                            <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
+                              <Text style={[styles.statusBadgeText, { color: badgeTextColor, fontWeight: '700' }]}>
+                                {label}
+                              </Text>
+                            </View>
+                          );
+                        })()
+                      ) : (
+                        <View style={[styles.statusBadge, { backgroundColor: activeTab === 'pending' ? '#FEF3C7' : statusColor + '15' }]}>
+                          <Text style={[styles.statusBadgeText, { color: activeTab === 'pending' ? '#D97706' : statusColor }]}>
+                            {booking.status.replace(/_/g, ' ').toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
                     </View>
 
                     <Text style={styles.cardDesc}>{booking.description}</Text>
@@ -395,6 +408,23 @@ export default function LeadsTab() {
                         <Text style={styles.detailText} numberOfLines={1}>{booking.address}</Text>
                       </View>
                     </View>
+
+                    {activeTab === 'cancelled' && (
+                      <View style={{
+                        marginTop: 10,
+                        padding: 8,
+                        borderRadius: 6,
+                        backgroundColor: (booking.cancelledBy === 'worker' || booking.rejectedByWorker === true || (Array.isArray(booking.rejectedBy) && booking.rejectedBy.map(String).includes(String(user?.id || (user as any)?._id || '')))) ? '#FEF2F2' : '#FFF7ED',
+                        borderLeftWidth: 3,
+                        borderLeftColor: (booking.cancelledBy === 'worker' || booking.rejectedByWorker === true || (Array.isArray(booking.rejectedBy) && booking.rejectedBy.map(String).includes(String(user?.id || (user as any)?._id || '')))) ? '#EF4444' : '#F97316'
+                      }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: (booking.cancelledBy === 'worker' || booking.rejectedByWorker === true || (Array.isArray(booking.rejectedBy) && booking.rejectedBy.map(String).includes(String(user?.id || (user as any)?._id || '')))) ? '#991B1B' : '#9A3412' }}>
+                          {(booking.cancelledBy === 'worker' || booking.rejectedByWorker === true || (Array.isArray(booking.rejectedBy) && booking.rejectedBy.map(String).includes(String(user?.id || (user as any)?._id || ''))))
+                            ? 'Lead Rejected by You'
+                            : `Cancelled by Customer: ${booking.customerName || 'Customer'}`}
+                        </Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
 
                   {/* Actions */}
@@ -413,14 +443,21 @@ export default function LeadsTab() {
                   ) : activeTab === 'active' ? (
                     <View style={styles.activeActionsRow}>
                       <TouchableOpacity 
-                        style={styles.chatBtn}
-                        onPress={() => router.push({
-                          pathname: '/chat-detail',
-                          params: { bookingId: booking._id, title: booking.title }
-                        })}
+                        style={[styles.chatBtn, !subscriptionActive && { borderColor: '#FECDD3', backgroundColor: '#FFF1F2' }]}
+                        onPress={() => {
+                          if (!subscriptionActive) {
+                            showToast('Please subscribe to start chatting.', 'warning');
+                          }
+                          router.push({
+                            pathname: '/chat-detail',
+                            params: { bookingId: booking._id, title: booking.title }
+                          });
+                        }}
                       >
-                        <Ionicons name="chatbox-outline" size={18} color="#0D9488" style={{ marginRight: 4 }} />
-                        <Text style={styles.chatBtnText}>Chat</Text>
+                        <Ionicons name={!subscriptionActive ? "lock-closed" : "chatbox-outline"} size={18} color={!subscriptionActive ? "#E11D48" : "#0D9488"} style={{ marginRight: 4 }} />
+                        <Text style={[styles.chatBtnText, !subscriptionActive && { color: '#E11D48', fontWeight: 'bold' }]}>
+                          {!subscriptionActive ? 'Chat 🔒' : 'Chat'}
+                        </Text>
                       </TouchableOpacity>
 
                       {booking.status === 'accepted' && (
@@ -606,7 +643,7 @@ export default function LeadsTab() {
             <Ionicons 
               name={toastType === 'success' ? 'checkmark-circle' : 'alert-circle'} 
               size={18} 
-              color={toastType === 'success' ? '#10B981' : '#EF4444'} 
+              color={toastType === 'success' ? '#10B981' : toastType === 'warning' ? '#F59E0B' : '#EF4444'} 
               style={{ marginRight: 8 }} 
             />
             <Text style={styles.toastText}>{toastMessage}</Text>

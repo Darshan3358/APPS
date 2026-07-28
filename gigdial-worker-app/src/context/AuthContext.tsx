@@ -335,8 +335,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: true, otpRequired: true, email: resData.email };
       }
 
-      setUser(resData.user);
-      setToken(resData.token || 'mock-token');
       setTempRegData({});
       return { success: true };
     } catch (err: any) {
@@ -354,8 +352,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const resData = await res.json();
       if (!res.ok) return { success: false, error: resData.error || 'Verification failed' };
 
-      setUser(resData.user);
-      setToken(resData.token || 'mock-token');
       setTempRegData({});
       return { success: true };
     } catch (err: any) {

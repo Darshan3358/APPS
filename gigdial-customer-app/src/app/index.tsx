@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, SafeAreaView, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-
-const { width } = Dimensions.get('window');
+import { useResponsive } from '../hooks/useResponsive';
+import { ResponsiveContainer } from '../components/ResponsiveContainer';
 
 export default function Index() {
   const { token, isLoading } = useAuth();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const { width, moderateScale, tokens, isDesktop, isTablet } = useResponsive();
 
-  // If logged in, skip onboarding and redirect to dashboard
   useEffect(() => {
     if (!isLoading && token) {
       router.replace('/(tabs)/dashboard');
@@ -21,7 +21,7 @@ export default function Index() {
   if (isLoading || token) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0F2C59" />
+        <ActivityIndicator size="large" color={tokens.colors.primary} />
       </View>
     );
   }
@@ -39,7 +39,7 @@ export default function Index() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveContainer style={{ backgroundColor: '#FFFFFF' }} maxWidth={640}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Top Header - Skip button */}
@@ -51,13 +51,12 @@ export default function Index() {
 
       <View style={styles.slideContainer}>
         {currentSlide === 0 ? (
-          // Slide 1: Welcome & Value Proposition
-          <View style={styles.content}>
+          <View style={[styles.content, { width: Math.min(width, 640) }]}>
             <View style={styles.illustrationContainer}>
               <View style={styles.illustrationCircle}>
-                <Ionicons name="people-sharp" size={70} color="#0F2C59" />
+                <Ionicons name="people-sharp" size={moderateScale(64)} color={tokens.colors.primary} />
                 <View style={styles.illustrationSubIcon}>
-                  <Ionicons name="ribbon" size={26} color="#0D9488" />
+                  <Ionicons name="ribbon" size={moderateScale(24)} color={tokens.colors.secondary} />
                 </View>
               </View>
             </View>
@@ -69,27 +68,26 @@ export default function Index() {
 
             <View style={styles.featuresWrapper}>
               <View style={styles.featureItem}>
-                <Ionicons name="shield-checkmark" size={16} color="#0D9488" />
+                <Ionicons name="shield-checkmark" size={16} color={tokens.colors.secondary} />
                 <Text style={styles.featureText}>Verified Workers</Text>
               </View>
               <View style={styles.featureItem}>
-                <Ionicons name="flash" size={16} color="#0D9488" />
+                <Ionicons name="flash" size={16} color={tokens.colors.secondary} />
                 <Text style={styles.featureText}>Direct Chat</Text>
               </View>
               <View style={styles.featureItem}>
-                <Ionicons name="card" size={16} color="#0D9488" />
+                <Ionicons name="card" size={16} color={tokens.colors.secondary} />
                 <Text style={styles.featureText}>Best Pricing</Text>
               </View>
             </View>
           </View>
         ) : (
-          // Slide 2: How It Works & Connect
-          <View style={styles.content}>
+          <View style={[styles.content, { width: Math.min(width, 640) }]}>
             <View style={styles.illustrationContainer}>
               <View style={[styles.illustrationCircle, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="chatbubbles" size={70} color="#0D9488" />
-                <View style={[styles.illustrationSubIcon, { backgroundColor: '#0F2C59' }]}>
-                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                <Ionicons name="chatbubbles" size={moderateScale(64)} color={tokens.colors.secondary} />
+                <View style={[styles.illustrationSubIcon, { backgroundColor: tokens.colors.primary }]}>
+                  <Ionicons name="checkmark" size={moderateScale(16)} color="#FFFFFF" />
                 </View>
               </View>
             </View>
@@ -101,15 +99,15 @@ export default function Index() {
 
             <View style={styles.featuresWrapper}>
               <View style={styles.featureItem}>
-                <Ionicons name="calendar-sharp" size={16} color="#0F2C59" />
+                <Ionicons name="calendar-sharp" size={16} color={tokens.colors.primary} />
                 <Text style={styles.featureText}>Flexible Schedule</Text>
               </View>
               <View style={styles.featureItem}>
-                <Ionicons name="chatbox-ellipses" size={16} color="#0F2C59" />
+                <Ionicons name="chatbox-ellipses" size={16} color={tokens.colors.primary} />
                 <Text style={styles.featureText}>Direct Contact</Text>
               </View>
               <View style={styles.featureItem}>
-                <Ionicons name="star" size={16} color="#F59E0B" />
+                <Ionicons name="star" size={16} color={tokens.colors.accent} />
                 <Text style={styles.featureText}>Top Rated</Text>
               </View>
             </View>
@@ -117,30 +115,24 @@ export default function Index() {
         )}
       </View>
 
-      {/* Navigation Indicators & Button */}
       <View style={styles.footer}>
         <View style={styles.dotsRow}>
           <View style={[styles.dot, currentSlide === 0 ? styles.activeDot : null]} />
           <View style={[styles.dot, currentSlide === 1 ? styles.activeDot : null]} />
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleNext}>
+        <TouchableOpacity style={styles.button} onPress={handleNext} activeOpacity={0.8}>
           <Text style={styles.buttonText}>
             {currentSlide === 0 ? 'Next' : 'Get Started'}
           </Text>
           <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ResponsiveContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'space-between',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -156,9 +148,11 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: '#F3F4F6',
+    minHeight: 36,
+    justifyContent: 'center',
   },
   skipText: {
     color: '#6B7280',
@@ -171,20 +165,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    width: width,
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   illustrationContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
   },
   illustrationCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
     backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -212,27 +205,28 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   slideTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#0F2C59',
     textAlign: 'center',
-    lineHeight: 36,
-    marginBottom: 16,
+    lineHeight: 34,
+    marginBottom: 14,
   },
   slideDescription: {
     fontSize: 15,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 32,
+    marginBottom: 28,
     paddingHorizontal: 10,
   },
   featuresWrapper: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 10,
+    gap: 10,
+    marginTop: 6,
   },
   featureItem: {
     flexDirection: 'row',
@@ -252,12 +246,12 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 32,
     alignItems: 'center',
   },
   dotsRow: {
     flexDirection: 'row',
-    marginBottom: 32,
+    marginBottom: 24,
     gap: 8,
   },
   dot: {
@@ -273,7 +267,7 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#0F2C59',
     width: '100%',
-    height: 54,
+    minHeight: 54,
     borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'center',

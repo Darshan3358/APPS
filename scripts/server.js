@@ -23,17 +23,78 @@ const io = new Server(server, {
   }
 });
 
+const verifyBookingOwnership = async (bookingId, user) => {
+  if (!bookingId || !user) return { allowed: false, booking: null };
+
+  const userIdStr = String(user._id || user.id || user.uid || '');
+  const isAdmin = user.role === 'admin' || user.isAdmin === true;
+
+  let query;
+  if (ObjectId.isValid(bookingId)) {
+    query = { $or: [{ _id: new ObjectId(bookingId) }, { id: bookingId }, { bookingId: bookingId }] };
+  } else {
+    query = { $or: [{ id: bookingId }, { bookingId: bookingId }] };
+  }
+
+  const booking = await db.collection('bookings').findOne(query);
+  if (!booking) return { allowed: false, booking: null, notFound: true };
+
+  if (isAdmin) return { allowed: true, booking };
+
+  const custIdStr = String(booking.customerId || booking.userId || '');
+  const wrkIdStr = String(booking.workerId || '');
+
+  if ((custIdStr && custIdStr === userIdStr) || (wrkIdStr && wrkIdStr === userIdStr)) {
+    return { allowed: true, booking };
+  }
+
+  // Pending bookings are accessible by workers in matching category before accept
+  if (booking.status === 'pending' && user.role === 'worker') {
+    return { allowed: true, booking };
+  }
+
+  return { allowed: false, booking };
+};
+
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
-  socket.on('join_booking', (bookingId) => {
-    socket.join(bookingId);
-    console.log(`Socket ${socket.id} joined room booking_${bookingId}`);
+  socket.on('join_booking', async (data) => {
+    try {
+      const bookingId = typeof data === 'string' ? data : data?.bookingId;
+      const token = typeof data === 'object' ? data?.token : null;
+      if (!bookingId) return;
+
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+          if (user) {
+            const { allowed } = await verifyBookingOwnership(bookingId, user);
+            if (!allowed) {
+              console.log(`[Socket] 🔒 Access denied for socket ${socket.id} to join room booking_${bookingId}`);
+              socket.emit('error', { message: 'Forbidden: Access denied to this booking room' });
+              return;
+            }
+          }
+        } catch (e) {
+          console.log(`[Socket] Token verification skipped/failed for room join`);
+        }
+      }
+
+      socket.join(bookingId);
+      socket.join(`booking_${bookingId}`);
+      console.log(`Socket ${socket.id} joined room booking_${bookingId}`);
+    } catch (err) {
+      console.error('[Socket] join_booking error:', err);
+    }
   });
 
   socket.on('join_user', (userId) => {
-    socket.join(userId);
-    console.log(`Socket ${socket.id} joined user room ${userId}`);
+    if (userId) {
+      socket.join(String(userId));
+      console.log(`Socket ${socket.id} joined user room ${userId}`);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -44,7 +105,8 @@ io.on('connection', (socket) => {
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://zarwebcoders:zarwebcoders@cluster0.lqgakzj.mongodb.net/gigdialapp";
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Health check endpoints (placed before database connection middleware)
 app.get('/health', (req, res) => {
@@ -3161,22 +3223,78 @@ app.get('/api/bookings/pending', auth, async (req, res) => {
     if (req.user.role === 'worker' && (!req.user.isApproved || req.user.kycStatus !== 'approved')) {
       return res.status(403).json({ error: "Worker verification pending. You must be approved by the admin to view leads." });
     }
-    const bookings = await db.collection('bookings').find({ status: { $in: ['pending', 'Pending'] } }).sort({ createdAt: -1 }).toArray();
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const isAdmin = req.user.role === 'admin' || req.user.isAdmin === true;
+
+    let query;
+    if (isAdmin) {
+      query = { status: { $in: ['pending', 'Pending'] } };
+    } else {
+      const workerName = req.user.name || req.user.fullName || '';
+      query = {
+        status: { $in: ['pending', 'Pending'] },
+        $or: [
+          { workerId: userIdStr },
+          { workerId: req.user.id },
+          { workerId: String(req.user._id) },
+          ...(req.user.uid ? [{ workerId: req.user.uid }] : []),
+          ...(workerName ? [{ workerName: workerName }] : [])
+        ]
+      };
+    }
+
+    const bookings = await db.collection('bookings').find(query).sort({ createdAt: -1 }).toArray();
     res.json(bookings);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+function categoryMatchesLead(categoryStr, title, desc) {
+  if (!categoryStr) return true;
+  const workerCats = categoryStr.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
+  const t = (title || '').toLowerCase();
+  const d = (desc || '').toLowerCase();
+  const keywordMap = {
+    electrician: ['electric', 'wiring', 'light', 'switch', 'power', 'fan', 'ac', 'appliance', 'fuse', 'wire', 'board'],
+    plumber: ['plumb', 'leak', 'pipe', 'tap', 'drain', 'water', 'basin', 'shower', 'sink', 'toilet'],
+    carpenter: ['carpent', 'wood', 'door', 'lock', 'furniture', 'cabinet', 'chair', 'table', 'hinge', 'bed'],
+    painter: ['paint', 'wall', 'waterproof', 'putty', 'color', 'colour', 'primer'],
+    cleaner: ['clean', 'wash', 'sweep', 'dust', 'sofa', 'kitchen', 'vacuum', 'housekeep']
+  };
+  return workerCats.some(cat => {
+    if (t.includes(cat) || d.includes(cat)) return true;
+    const kw = keywordMap[cat];
+    if (kw) return kw.some(k => t.includes(k) || d.includes(k));
+    return false;
+  });
+}
+
 // GET /api/bookings/active/:workerId
-app.get('/api/bookings/active/:workerId', async (req, res) => {
+app.get('/api/bookings/active/:workerId', auth, async (req, res) => {
   try {
     const { workerId } = req.params;
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const isAdmin = req.user.role === 'admin' || req.user.isAdmin === true;
+
+    if (!isAdmin && userIdStr !== String(workerId)) {
+      return res.status(403).json({ error: 'Forbidden: Access denied to these worker bookings' });
+    }
+
+    const workerName = req.user.name || req.user.fullName || '';
+    const workerOrConditions = [
+      { workerId: workerId },
+      { workerId: userIdStr },
+      ...(req.user.uid ? [{ workerId: req.user.uid }] : []),
+      ...(workerName ? [{ workerName: workerName }, { name: workerName }] : []),
+      ...(ObjectId.isValid(workerId) ? [{ workerId: new ObjectId(workerId) }] : [])
+    ];
+
     const bookings = await db.collection('bookings').find({
-      workerId,
-      status: { $in: ['accepted', 'on_the_way', 'in_progress', 'completed'] }
-    }).toArray();
-    
+      $or: workerOrConditions,
+      status: { $in: ['accepted', 'on_the_way', 'in_progress', 'completed', 'cancelled', 'Cancelled'] }
+    }).sort({ createdAt: -1 }).toArray();
+
     // Strip completionOtp for worker security
     const securedBookings = bookings.map(b => {
       const copy = { ...b };
@@ -3186,6 +3304,119 @@ app.get('/api/bookings/active/:workerId', async (req, res) => {
     });
 
     res.json(securedBookings);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/worker/notifications
+app.get('/api/worker/notifications', auth, async (req, res) => {
+  try {
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const workerName = req.user.name || req.user.fullName || '';
+
+    const workerBookings = await db.collection('bookings').find({
+      $or: [
+        { workerId: userIdStr },
+        { workerId: req.user.id },
+        { workerId: String(req.user._id) },
+        ...(req.user.uid ? [{ workerId: req.user.uid }] : []),
+        ...(workerName ? [{ workerName: workerName }] : [])
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    const notifications = workerBookings.map(b => ({
+      id: b._id.toString(),
+      bookingId: b._id.toString(),
+      type: (b.status || '').toLowerCase() === 'pending' ? 'new_lead' : 'booking_updated',
+      title: b.title || b.serviceName || 'Service Request',
+      customerName: b.customerName || 'Customer',
+      customerPhoto: b.customerPhoto || b.userPhoto || undefined,
+      address: b.address || 'Address not specified',
+      status: b.status,
+      price: b.price,
+      date: b.schedule || 'Today',
+      time: b.time || 'ASAP',
+      createdAt: b.createdAt || new Date()
+    }));
+
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/worker/leads
+app.get('/api/worker/leads', auth, async (req, res) => {
+  try {
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const workerName = req.user.name || req.user.fullName || '';
+
+    const bookings = await db.collection('bookings').find({
+      $or: [
+        { workerId: userIdStr },
+        { workerId: req.user.id },
+        { workerId: String(req.user._id) },
+        ...(req.user.uid ? [{ workerId: req.user.uid }] : []),
+        ...(workerName ? [{ workerName: workerName }] : [])
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    const securedBookings = bookings.map(b => {
+      const copy = { ...b };
+      delete copy.completionOtp;
+      delete copy.otpGeneratedAt;
+      return copy;
+    });
+
+    res.json(securedBookings);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/worker/bookings
+app.get('/api/worker/bookings', auth, async (req, res) => {
+  try {
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const workerName = req.user.name || req.user.fullName || '';
+    const bookings = await db.collection('bookings').find({
+      $or: [
+        { workerId: userIdStr },
+        { workerId: req.user.id },
+        { workerId: String(req.user._id) },
+        ...(req.user.uid ? [{ workerId: req.user.uid }] : []),
+        ...(workerName ? [{ workerName: workerName }] : [])
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    const securedBookings = bookings.map(b => {
+      const copy = { ...b };
+      delete copy.completionOtp;
+      delete copy.otpGeneratedAt;
+      return copy;
+    });
+
+    res.json(securedBookings);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/customer/bookings
+app.get('/api/customer/bookings', auth, async (req, res) => {
+  try {
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const bookings = await db.collection('bookings').find({
+      $or: [
+        { customerId: userIdStr },
+        { customerId: req.user.id },
+        { customerId: String(req.user._id) },
+        ...(req.user.uid ? [{ customerId: req.user.uid }] : [])
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    res.json(bookings);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3307,15 +3538,26 @@ app.put('/api/bookings/reject/:id', async (req, res) => {
     const { id } = req.params;
     const { workerId } = req.body;
 
+    let queryConditions = [
+      { id: id },
+      { bookingId: id }
+    ];
     if (ObjectId.isValid(id)) {
-      await db.collection('bookings').updateOne(
-        { _id: new ObjectId(id) },
-        { 
-          $set: { status: 'cancelled' },
-          $addToSet: { rejectedBy: workerId }
-        }
-      );
+      queryConditions.push({ _id: new ObjectId(id) });
     }
+
+    await db.collection('bookings').updateOne(
+      { $or: queryConditions },
+      { 
+        $set: { 
+          status: 'cancelled',
+          cancelledBy: 'worker',
+          rejectedByWorker: true,
+          updatedAt: new Date()
+        },
+        $addToSet: { rejectedBy: String(workerId || '') }
+      }
+    );
 
     res.json({ success: true, message: "Lead rejected" });
   } catch (err) {
@@ -3327,21 +3569,32 @@ app.put('/api/bookings/reject/:id', async (req, res) => {
 app.put('/api/bookings/update-status/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, cancelledBy } = req.body;
+    const cleanStatus = (status || '').toLowerCase();
     const validStatuses = ['pending', 'accepted', 'on_the_way', 'in_progress', 'completed', 'cancelled'];
-    if (!validStatuses.includes(status)) {
+    if (!validStatuses.includes(cleanStatus)) {
       return res.status(400).json({ error: "Invalid status value" });
     }
 
-    const booking = await db.collection('bookings').findOne({ _id: new ObjectId(id) });
-    if (!booking) return res.status(404).json({ error: "Booking not found" });
+    let queryConditions = [
+      { id: id },
+      { bookingId: id }
+    ];
+    if (ObjectId.isValid(id)) {
+      queryConditions.push({ _id: new ObjectId(id) });
+    }
+
+    const updateFields = { status: cleanStatus, updatedAt: new Date() };
+    if (cleanStatus === 'cancelled') {
+      updateFields.cancelledBy = cancelledBy || 'customer';
+    }
 
     await db.collection('bookings').updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status } }
+      { $or: queryConditions },
+      { $set: updateFields }
     );
 
-    res.json({ success: true });
+    res.json({ success: true, status: cleanStatus });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4525,16 +4778,25 @@ app.post('/api/upload', upload.any(), async (req, res) => {
 });
 
 // POST /api/users/:uid/upload-profile-photo - Customer profile photo upload to Cloudinary
-app.post('/api/users/:uid/upload-profile-photo', upload.single('profilePhoto'), async (req, res) => {
+app.post('/api/users/:uid/upload-profile-photo', upload.any(), async (req, res) => {
   try {
     const { uid } = req.params;
     let photoPath = null;
 
-    if (req.file) {
-      const result = await uploadFromBuffer(req.file.buffer, 'customer_profiles');
+    const uploadedFile = (req.files && req.files.length > 0 ? req.files[0] : null) || req.file;
+
+    if (uploadedFile) {
+      const result = await uploadFromBuffer(uploadedFile.buffer, 'customer_profiles', uploadedFile.originalname || 'profile.jpg');
       photoPath = result.secure_url;
     } else if (req.body && req.body.profilePhoto) {
-      photoPath = req.body.profilePhoto;
+      if (typeof req.body.profilePhoto === 'string' && req.body.profilePhoto.startsWith('data:image')) {
+        const base64Data = req.body.profilePhoto.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const result = await uploadFromBuffer(buffer, 'customer_profiles', 'profile.jpg');
+        photoPath = result.secure_url;
+      } else {
+        photoPath = req.body.profilePhoto;
+      }
     }
 
     if (!photoPath) {
@@ -4557,16 +4819,25 @@ app.post('/api/users/:uid/upload-profile-photo', upload.single('profilePhoto'), 
 });
 
 // POST /api/worker/:uid/upload-profile-photo - upload custom profile photo to Cloudinary
-app.post('/api/worker/:uid/upload-profile-photo', upload.single('profilePhoto'), async (req, res) => {
+app.post('/api/worker/:uid/upload-profile-photo', upload.any(), async (req, res) => {
   try {
     const { uid } = req.params;
     let photoPath = null;
 
-    if (req.file) {
-      const result = await uploadFromBuffer(req.file.buffer, 'worker_profiles');
+    const uploadedFile = (req.files && req.files.length > 0 ? req.files[0] : null) || req.file;
+
+    if (uploadedFile) {
+      const result = await uploadFromBuffer(uploadedFile.buffer, 'worker_profiles', uploadedFile.originalname || 'profile.jpg');
       photoPath = result.secure_url;
     } else if (req.body && req.body.profilePhoto) {
-      photoPath = req.body.profilePhoto;
+      if (typeof req.body.profilePhoto === 'string' && req.body.profilePhoto.startsWith('data:image')) {
+        const base64Data = req.body.profilePhoto.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const result = await uploadFromBuffer(buffer, 'worker_profiles', 'profile.jpg');
+        photoPath = result.secure_url;
+      } else {
+        photoPath = req.body.profilePhoto;
+      }
     }
 
     if (!photoPath) {
@@ -4581,7 +4852,7 @@ app.post('/api/worker/:uid/upload-profile-photo', upload.single('profilePhoto'),
 
     // Update in workers collection
     await db.collection('workers').updateOne(
-      { uid: uid },
+      { $or: [{ uid: uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }] },
       { $set: { image: photoPath } }
     );
 

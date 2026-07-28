@@ -34,17 +34,24 @@ export default function EditProfileScreen() {
   // Handle default avatar selection
   const selectDefaultAvatar = async (url: string) => {
     setSelectedPhoto(url);
-    if (!user?.id) return;
+    const userId = user?.id || (user as any)?._id;
+    if (!userId) return;
     setUploading(true);
     try {
-      const res = await fetch(`${LOCAL_API_URL}/worker/${user.id}/profile`, {
+      const res = await fetch(`${LOCAL_API_URL}/worker/${userId}/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profilePhoto: url })
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+      }
       if (res.ok) {
-        const updatedUser = { ...data.user, id: data.user._id.toString() };
+        const updatedUser = { ...data.user, id: data.user._id ? data.user._id.toString() : data.user.id };
         setUser(updatedUser);
         Alert.alert('Avatar Updated', 'Selected default profile photo.');
       } else {
@@ -59,7 +66,8 @@ export default function EditProfileScreen() {
 
   // Open device media gallery / custom file selector
   const handleCustomUpload = async () => {
-    if (!user?.id) {
+    const userId = user?.id || (user as any)?._id;
+    if (!userId) {
       Alert.alert('Error', 'User session not found.');
       return;
     }
@@ -78,14 +86,18 @@ export default function EditProfileScreen() {
             const formData = new FormData();
             formData.append('profilePhoto', file);
 
-            const res = await fetch(`${LOCAL_API_URL}/worker/${user.id}/upload-profile-photo`, {
+            const res = await fetch(`${LOCAL_API_URL}/worker/${userId}/upload-profile-photo`, {
               method: 'POST',
               body: formData,
             });
-            const data = await res.json();
+            const text = await res.text();
+            let data: any = {};
+            try { data = JSON.parse(text); } catch (e) {
+              if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+            }
             if (res.ok) {
               setSelectedPhoto(data.profilePhoto);
-              const updatedUser = { ...data.user, id: data.user._id.toString() };
+              const updatedUser = { ...data.user, id: data.user._id ? data.user._id.toString() : data.user.id };
               setUser(updatedUser);
               Alert.alert('Success', 'Profile photo updated successfully!');
             } else {
@@ -110,9 +122,8 @@ export default function EditProfileScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+        allowsEditing: false, // Direct upload without crop option
+        quality: 0.7,
         base64: true,
       });
 
@@ -121,26 +132,83 @@ export default function EditProfileScreen() {
       }
 
       const asset = result.assets[0];
-      const base64Uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       setUploading(true);
 
-      const res = await fetch(`${LOCAL_API_URL}/worker/${user.id}/upload-profile-photo`, {
+      // Attempt 1: Upload via FormData (multipart/form-data)
+      let uploadSuccess = false;
+      try {
+        const formData = new FormData();
+        const filename = asset.fileName || asset.uri.split('/').pop() || `profile_${Date.now()}.jpg`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+          ? `file://${asset.uri}`
+          : asset.uri;
+
+        formData.append('profilePhoto', {
+          uri: fileUri,
+          name: filename,
+          type: asset.mimeType || type,
+        } as any);
+
+        const res = await fetch(`${LOCAL_API_URL}/worker/${userId}/upload-profile-photo`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        const text = await res.text();
+        let data: any = {};
+        try { data = JSON.parse(text); } catch (e) {
+          if (!res.ok) throw new Error(`Server status ${res.status}`);
+        }
+
+        if (res.ok && data.profilePhoto) {
+          setSelectedPhoto(data.profilePhoto);
+          if (data.user) {
+            const updatedUser = { ...data.user, id: data.user._id ? data.user._id.toString() : data.user.id };
+            setUser(updatedUser);
+          }
+          Alert.alert('Success', 'Profile photo updated successfully!');
+          uploadSuccess = true;
+          return;
+        }
+      } catch (err) {
+        console.log('FormData upload failed, using base64 fallback:', err);
+      }
+
+      if (uploadSuccess) return;
+
+      // Attempt 2: Fallback to base64 JSON upload
+      const base64Uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      const res = await fetch(`${LOCAL_API_URL}/worker/${userId}/upload-profile-photo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profilePhoto: base64Uri }),
       });
 
-      const data = await res.json();
-      if (res.ok) {
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        if (!res.ok) {
+          throw new Error(`Upload failed (Status ${res.status}). Please check network/server connection.`);
+        }
+        throw new Error('Server returned an invalid response.');
+      }
+
+      if (res.ok && data.profilePhoto) {
         setSelectedPhoto(data.profilePhoto);
-        const updatedUser = { ...data.user, id: data.user._id.toString() };
-        setUser(updatedUser);
+        if (data.user) {
+          const updatedUser = { ...data.user, id: data.user._id ? data.user._id.toString() : data.user.id };
+          setUser(updatedUser);
+        }
         Alert.alert('Success', 'Profile photo updated successfully!');
       } else {
         Alert.alert('Upload Failed', data.error || 'Failed to upload photo.');
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to select image from gallery.');
+      Alert.alert('Upload Error', err.message || 'Failed to upload photo from gallery.');
     } finally {
       setUploading(false);
     }

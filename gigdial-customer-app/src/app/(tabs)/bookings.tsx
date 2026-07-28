@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, ActivityIndicator, Alert, Modal, TextInput, SafeAreaView, Image, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, ActivityIndicator, Alert, Modal, TextInput, SafeAreaView, Image, StatusBar, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,37 +42,44 @@ const getProfilePhotoUri = (photo: string | undefined, fallbackName: string = 'P
 };
 
 export default function BookingsScreen() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
-  
+  const insets = useSafeAreaInsets();
+  const topPadding = StatusBar.currentHeight || insets.top;
+
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'Contacted' | 'Completed' | 'Cancelled'>('All');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'Contacted' | 'Completed'>('All');
-  
-  // Modal state
+
+  // Detail Modal state
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Rating Modal state
+  const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
+    fetchBookings();
     if (user?.id) {
-      fetchBookings();
-
       const interval = setInterval(() => {
         fetchBookings();
       }, 5000);
 
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, token]);
 
   const fetchBookings = async () => {
-    if (!user?.id) return;
     setLoading(true);
     try {
-      const res = await fetch(`${LOCAL_API_URL}/bookings/user/${user.id}`);
+      const res = await fetch(`${LOCAL_API_URL}/customer/bookings`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setBookings(data);
@@ -85,31 +92,57 @@ export default function BookingsScreen() {
   };
 
   const handleCancelBooking = async (bookingId: string) => {
-    Alert.alert('Cancel Booking', 'Are you sure you want to cancel this booking request?', [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes, Cancel',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const res = await fetch(`${LOCAL_API_URL}/bookings/update-status/${bookingId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'Cancelled' }),
-            });
-            if (res.ok) {
-              Alert.alert('Booking Cancelled', 'Your booking request has been cancelled.');
-              setShowDetailModal(false);
-              fetchBookings();
-            } else {
-              Alert.alert('Error', 'Failed to cancel booking.');
-            }
-          } catch (err) {
-            Alert.alert('Error', 'Network error.');
+    const doCancel = async () => {
+      try {
+        const res = await fetch(`${LOCAL_API_URL}/bookings/update-status/${bookingId}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: 'cancelled' }),
+        });
+        if (res.ok) {
+          if (Platform.OS === 'web') {
+            window.alert('Your booking request has been cancelled.');
+          } else {
+            Alert.alert('Booking Cancelled', 'Your booking request has been cancelled.');
+          }
+          setShowDetailModal(false);
+          fetchBookings();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          const errMsg = data.error || 'Failed to cancel booking.';
+          if (Platform.OS === 'web') {
+            window.alert(errMsg);
+          } else {
+            Alert.alert('Error', errMsg);
           }
         }
+      } catch (err) {
+        if (Platform.OS === 'web') {
+          window.alert('Network error while cancelling booking.');
+        } else {
+          Alert.alert('Error', 'Network error.');
+        }
       }
-    ]);
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to cancel this booking request?');
+      if (confirmed) {
+        doCancel();
+      }
+    } else {
+      Alert.alert('Cancel Booking', 'Are you sure you want to cancel this booking request?', [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: doCancel
+        }
+      ]);
+    }
   };
 
   const handleRateBooking = async () => {
@@ -184,7 +217,11 @@ export default function BookingsScreen() {
 
   const getFilteredBookings = () => {
     if (activeTab === 'All') return bookings;
-    return bookings.filter(b => b.status.toLowerCase() === activeTab.toLowerCase());
+    const tabLower = activeTab.toLowerCase();
+    if (tabLower === 'contacted' || tabLower === 'active') {
+      return bookings.filter(b => ['contacted', 'accepted', 'on_the_way', 'in_progress'].includes(b.status.toLowerCase()));
+    }
+    return bookings.filter(b => b.status.toLowerCase() === tabLower);
   };
 
   const openDetail = (booking: Booking) => {
@@ -200,14 +237,13 @@ export default function BookingsScreen() {
       return { container: styles.statusPending, text: styles.statusTextPending, label: 'PENDING' };
     } else if (s === 'completed') {
       return { container: styles.statusCompleted, text: styles.statusTextCompleted, label: 'COMPLETED' };
-    } else if (s === 'contacted' || s === 'accepted') {
+    } else if (s === 'contacted' || s === 'accepted' || s === 'on_the_way' || s === 'in_progress') {
       return { container: styles.statusContacted, text: styles.statusTextContacted, label: 'ACTIVE' };
     } else {
       return { container: styles.statusCancelled, text: styles.statusTextCancelled, label: status.toUpperCase() };
     }
   };
 
-  const insets = useSafeAreaInsets();
   const tabBarHeight = 75;
   const bottomPadding = tabBarHeight + insets.bottom + 20;
 
@@ -225,14 +261,14 @@ export default function BookingsScreen() {
 
       {/* Tabs */}
       <View style={styles.tabsRow}>
-        {(['All', 'Pending', 'Contacted', 'Completed'] as const).map((tab) => (
+        {(['All', 'Pending', 'Contacted', 'Completed', 'Cancelled'] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[
               styles.tabButton,
               activeTab === tab && styles.tabButtonActive
             ]}
-            onPress={() => setActiveTab(tab)}
+            onPress={() => setActiveTab(tab as any)}
           >
             <Text style={[
               styles.tabButtonText,

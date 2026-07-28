@@ -144,47 +144,31 @@ function AppContent() {
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${API_URL}/bookings/pending`, { headers });
+        const res = await fetch(`${API_URL}/worker/notifications`, { headers });
         if (res.ok) {
-          const leads = await res.json();
-          if (Array.isArray(leads) && leads.length > 0) {
-            const latestLead = leads.find((lead: any) => {
-              const leadId = lead.id || lead._id || '';
-              // Don't show if already seen or dismissed
+          const notifications = await res.json();
+          if (Array.isArray(notifications) && notifications.length > 0) {
+            const latestLead = notifications.find((n: any) => {
+              const leadId = n.bookingId || n.id || n._id || '';
               if (!leadId || globalSeenLeadIds.has(leadId)) return false;
-
-              // Only show live leads for current day
-              if (!isLiveLeadForCurrentDay(lead)) return false;
-
-              const isTargetedWorker = lead.workerId && (
-                String(lead.workerId) === String(userId) ||
-                String(lead.workerId) === String(user?.id) ||
-                String(lead.workerId) === String((user as any)?._id)
-              );
-              const matchesCategory = !workerCategory || categoryMatchesLead(workerCategory, lead.title, lead.description);
-              return isTargetedWorker || matchesCategory;
+              return n.type === 'new_lead' || (n.status || '').toLowerCase() === 'pending';
             });
 
             if (latestLead) {
-              const leadId = latestLead.id || latestLead._id || '';
+              const leadId = latestLead.bookingId || latestLead.id || latestLead._id || '';
               globalSeenLeadIds.add(leadId);
               AsyncStorage.setItem(storageKey, JSON.stringify(Array.from(globalSeenLeadIds))).catch(() => {});
 
-              let schedDate = 'Today';
-              let schedTime = '10:30 AM';
-              if (latestLead.schedule) {
-                const parts = latestLead.schedule.split(' at ');
-                if (parts[0]) schedDate = parts[0];
-                if (parts[1]) schedTime = parts[1];
-              }
+              let schedDate = latestLead.date || 'Today';
+              let schedTime = latestLead.time || '10:30 AM';
 
               setActiveLead({
                 id: leadId,
                 title: latestLead.title || 'Service Request',
-                customerName: latestLead.customerName || 'Amit Sharma',
+                customerName: latestLead.customerName || 'Customer',
                 customerPhoto: latestLead.customerPhoto || undefined,
-                address: latestLead.address || 'Adajan, Surat',
-                distance: latestLead.distance || '2.5 km away',
+                address: latestLead.address || 'Address not specified',
+                distance: '2.5 km away',
                 date: schedDate,
                 time: schedTime,
                 serviceNeeded: latestLead.title || 'Service Request'

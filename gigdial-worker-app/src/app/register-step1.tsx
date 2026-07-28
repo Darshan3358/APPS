@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, StatusBar, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import ProgressBar from '../components/ProgressBar';
 import Input from '../components/Input';
+
+const INDIAN_CITIES = [
+  'Ahmedabad', 'Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kolkata',
+  'Pune', 'Jaipur', 'Surat', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane',
+  'Bhopal', 'Visakhapatnam', 'Patna', 'Vadodara', 'Ludhiana', 'Agra', 'Nashik',
+  'Faridabad', 'Meerut', 'Rajkot', 'Varanasi', 'Srinagar', 'Aurangabad',
+  'Dhanbad', 'Amritsar', 'Allahabad', 'Ranchi', 'Howrah', 'Coimbatore',
+  'Jabalpur', 'Gwalior', 'Vijayawada', 'Jodhpur', 'Madurai', 'Raipur',
+  'Kota', 'Guwahati', 'Chandigarh', 'Solapur', 'Hubli', 'Mysore',
+  'Tiruchirappalli', 'Bareilly', 'Aligarh', 'Moradabad', 'Kolhapur',
+];
 
 export default function RegisterStep1() {
   const [name, setName] = useState('');
@@ -15,6 +26,9 @@ export default function RegisterStep1() {
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [citySearch, setCitySearch] = useState('');
   
   const [errors, setErrors] = useState<any>({});
   const [submitError, setSubmitError] = useState('');
@@ -30,7 +44,7 @@ export default function RegisterStep1() {
     if (!password || password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
     if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
     if (!phone.trim() || phone.length < 10) newErrors.phone = 'Valid Phone number is required.';
-    if (!city.trim()) newErrors.city = 'City is required.';
+    if (!city.trim()) newErrors.city = 'City selection is required.';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -138,14 +152,22 @@ export default function RegisterStep1() {
             error={errors.phone}
           />
 
-          <Input
-            label="City"
-            placeholder="Select city"
-            iconName="pin-outline"
-            value={city}
-            onChangeText={(val) => { setCity(val); setErrors({ ...errors, city: '' }); }}
-            error={errors.city}
-          />
+          {/* City Selection Field */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.fieldLabel}>City</Text>
+            <TouchableOpacity 
+              style={[styles.citySelector, errors.city ? styles.inputErrorBorder : null]} 
+              onPress={() => setShowCityModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="pin-outline" size={20} color="#9CA3AF" style={styles.fieldIcon} />
+              <Text style={[styles.citySelectorText, !city ? styles.placeholderText : null]}>
+                {city || 'Select city'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+            {errors.city ? <Text style={styles.errorText}>{errors.city}</Text> : null}
+          </View>
 
           <Input
             label="Address"
@@ -189,6 +211,66 @@ export default function RegisterStep1() {
           <Text style={styles.backText}>Cancel Registration</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* City Selection Modal */}
+      <Modal visible={showCityModal} animationType="slide" transparent onRequestClose={() => setShowCityModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select City</Text>
+              <TouchableOpacity onPress={() => setShowCityModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#0F2C59" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchWrapper}>
+              <Ionicons name="search-outline" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search city..."
+                placeholderTextColor="#9CA3AF"
+                value={citySearch}
+                onChangeText={setCitySearch}
+              />
+              {citySearch ? (
+                <TouchableOpacity onPress={() => setCitySearch('')}>
+                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <ScrollView style={{ maxHeight: 350 }} keyboardShouldPersistTaps="handled">
+              {INDIAN_CITIES
+                .filter(c => c.toLowerCase().includes(citySearch.toLowerCase()))
+                .map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.cityItem, city === item ? styles.selectedCityItem : null]}
+                    onPress={() => {
+                      setCity(item);
+                      setErrors({ ...errors, city: '' });
+                      setShowCityModal(false);
+                      setCitySearch('');
+                    }}
+                  >
+                    <Ionicons 
+                      name="location-outline" 
+                      size={18} 
+                      color={city === item ? '#0D9488' : '#6B7280'} 
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text style={[styles.cityItemText, city === item ? styles.selectedCityItemText : null]}>
+                      {item}
+                    </Text>
+                    {city === item ? (
+                      <Ionicons name="checkmark" size={20} color="#0D9488" />
+                    ) : null}
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -262,6 +344,112 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.5,
   },
+  inputContainer: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F2C59',
+    marginBottom: 6,
+  },
+  fieldIcon: {
+    marginRight: 12,
+  },
+  citySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E8EC',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 54,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  citySelectorText: {
+    flex: 1,
+    color: '#1A1A1A',
+    fontSize: 15,
+  },
+  placeholderText: {
+    color: '#9CA3AF',
+  },
+  inputErrorBorder: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F2C59',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F6FA',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1A1A1A',
+  },
+  cityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  selectedCityItem: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+  },
+  cityItemText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  selectedCityItemText: {
+    color: '#0D9488',
+    fontWeight: '700',
+  },
   backBtn: {
     paddingVertical: 12,
     alignItems: 'center',
@@ -304,3 +492,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

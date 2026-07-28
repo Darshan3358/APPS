@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SafeAreaView, Image, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, StatusBar } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import Input from '../components/Input';
 import { Ionicons } from '@expo/vector-icons';
+import { TOAST } from '../constants/toastMessages';
+import { ResponsiveContainer } from '../components/ResponsiveContainer';
 
 export default function LoginScreen() {
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,23 +27,26 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError('');
     if (!emailOrPhone || !password) {
-      setError('Please fill in all fields.');
+      setError('Please fill in all required fields.');
+      showToast(TOAST.AUTH.INVALID_CREDENTIALS, 'error');
       return;
     }
 
     const res = await login(emailOrPhone, password);
     if (res.success) {
-      showToast('Login successful!');
+      showToast(TOAST.AUTH.WELCOME, 'success');
       setTimeout(() => {
-        router.replace('/(tabs)/dashboard');
-      }, 1500);
+        router.replace((redirect as any) || '/(tabs)/dashboard');
+      }, 1000);
     } else {
-      setError(res.error || 'Login failed. Please check credentials.');
+      const errMsg = res.error || TOAST.AUTH.INVALID_CREDENTIALS;
+      showToast(errMsg, 'error');
+      setError(errMsg);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeContainer}>
+    <ResponsiveContainer maxWidth={520}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F6FA" />
       {toast && (
         <View style={[styles.toastContainer, toast.type === 'error' && styles.toastError]}>
@@ -88,6 +94,7 @@ export default function LoginScreen() {
             style={[styles.loginBtn, isLoading && styles.disabledBtn]} 
             onPress={handleLogin}
             disabled={isLoading}
+            activeOpacity={0.8}
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -105,15 +112,11 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: '#F5F6FA',
-  },
   scrollContainer: {
     padding: 24,
     justifyContent: 'center',
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
   loginBtn: {
     backgroundColor: '#0F2C59',
     borderRadius: 14,
-    height: 54,
+    minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0F2C59',

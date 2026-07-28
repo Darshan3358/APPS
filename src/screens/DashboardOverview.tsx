@@ -28,8 +28,10 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isWide = width >= 1200;
   const isMobile = width < 768;
-  const cardWidth = isMobile ? '47%' : '31%';
+  const isSmall = width < 400;
+  const cardWidth = isWide ? '23.5%' : isMobile ? (isSmall ? '100%' : '48%') : '31%';
   
   const tabBarHeight = Platform.OS === 'ios' ? 76 : 60;
   const bottomPadding = tabBarHeight + insets.bottom + 20;

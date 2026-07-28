@@ -143,7 +143,7 @@ export default function DashboardScreen() {
         setWorkers(sorted);
       }
     } catch (err) {
-      console.error('Failed to fetch workers:', err);
+      console.warn('Failed to fetch workers:', err);
     } finally {
       setLoading(false);
     }

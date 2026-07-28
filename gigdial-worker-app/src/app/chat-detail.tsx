@@ -28,10 +28,10 @@ interface ChatMessage {
 }
 
 export default function ChatDetailScreen() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bookingId, title } = useLocalSearchParams();
+  const { bookingId, partnerName } = useLocalSearchParams();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -39,18 +39,50 @@ export default function ChatDetailScreen() {
   const [uploading, setUploading] = useState(false);
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
+  const [bookingStatus, setBookingStatus] = useState<string>('Pending');
+  const [workerHasSubscription, setWorkerHasSubscription] = useState<boolean>(false);
+  const [chatEnabled, setChatEnabled] = useState<boolean>(false);
+  const [customerName, setCustomerName] = useState<string>((partnerName as string) || 'Customer');
+  const [customerPhoto, setCustomerPhoto] = useState<string | null>(null);
+  const [serviceCategory, setServiceCategory] = useState<string>('Service Request');
 
   const flatListRef = useRef<FlatList>(null);
 
   const paddingTop = Platform.OS === 'android' ? Math.max(StatusBar.currentHeight || 0, insets.top) + 10 : Math.max(insets.top, 12);
   const paddingBottom = Math.max(insets.bottom, 12);
 
+  const getProfilePhotoUri = (photo: string | undefined, fallbackName: string = 'User'): string => {
+    if (!photo || photo.includes('default-avatar.png') || photo.includes('worker_ramesh.png')) {
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=0D9488&color=fff&size=128`;
+    }
+    if (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:')) {
+      return photo;
+    }
+    const serverRoot = LOCAL_API_URL.replace('/api', '');
+    const cleanPhoto = photo.startsWith('/') ? photo : `/${photo}`;
+    return `${serverRoot}${cleanPhoto}`;
+  };
+
   const fetchMessages = async () => {
     try {
-      const res = await fetch(`${LOCAL_API_URL}/bookings/${bookingId}/chats`);
+      const res = await fetch(`${LOCAL_API_URL}/bookings/${bookingId}/chats`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
-        setMessages(data);
+        if (Array.isArray(data)) {
+          setMessages(data);
+        } else if (data && data.messages) {
+          setMessages(data.messages);
+          if (typeof data.chatEnabled === 'boolean') setChatEnabled(data.chatEnabled);
+          if (data.bookingStatus) setBookingStatus(data.bookingStatus);
+          if (typeof data.workerHasSubscription === 'boolean') setWorkerHasSubscription(data.workerHasSubscription);
+          if (data.customerName) setCustomerName(data.customerName);
+          if (data.customerPhoto) setCustomerPhoto(data.customerPhoto);
+          if (data.serviceName) setServiceCategory(data.serviceName);
+        }
       }
     } catch (err) {
       console.log('Error fetching chat messages:', err);
@@ -61,7 +93,7 @@ export default function ChatDetailScreen() {
     fetchMessages();
     const interval = setInterval(fetchMessages, 2500);
     return () => clearInterval(interval);
-  }, [bookingId]);
+  }, [bookingId, token]);
 
   const handleSendText = async () => {
     if (!inputText.trim()) return;
@@ -72,7 +104,10 @@ export default function ChatDetailScreen() {
     try {
       const res = await fetch(`${LOCAL_API_URL}/bookings/${bookingId}/chats`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           senderRole: 'worker',
           text: originalText,
@@ -416,29 +451,66 @@ export default function ChatDetailScreen() {
         >
           <Ionicons name="arrow-back" size={22} color="#1A1A1A" />
         </TouchableOpacity>
+
+        <Image 
+          source={{ uri: getProfilePhotoUri(customerPhoto || undefined, customerName) }} 
+          style={styles.headerAvatar} 
+        />
         
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>{title || 'Chat'}</Text>
-          <View style={styles.onlineBadge}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.headerSub}>Online</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{customerName}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.onlineBadge}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.headerSub}>Online</Text>
+            </View>
+            <Text style={styles.serviceCategoryText} numberOfLines={1}>• {serviceCategory}</Text>
           </View>
         </View>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 10 }} />
       </View>
 
       <KeyboardAvoidingView 
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => item._id || String(index)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        />
+        {(!chatEnabled || !workerHasSubscription || bookingStatus === 'Pending') ? (
+          <View style={styles.lockedCenterContainer}>
+            <View style={styles.largeLockCircle}>
+              <Ionicons name="lock-closed-outline" size={44} color="#0D9488" />
+            </View>
+            <Text style={styles.lockedCenterTitle}>Subscription Required</Text>
+            <Text style={styles.lockedCenterSubtitle}>
+              {!workerHasSubscription 
+                ? 'Please activate your subscription to chat with the customer.'
+                : 'Please accept the lead to start chatting with the customer.'}
+            </Text>
+            {!workerHasSubscription ? (
+              <TouchableOpacity 
+                style={styles.lockedReturnBtn}
+                onPress={() => router.push('/(tabs)/subscription')}
+              >
+                <Text style={styles.lockedReturnBtnText}>Buy Subscription</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.lockedReturnBtn}
+                onPress={() => router.push('/(tabs)/leads')}
+              >
+                <Text style={styles.lockedReturnBtnText}>View Leads</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item, index) => item._id || String(index)}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          />
+        )}
 
         {uploading && (
           <View style={styles.uploadingBar}>
@@ -466,27 +538,39 @@ export default function ChatDetailScreen() {
           </View>
         )}
 
-        {/* Input Bar with Dynamic Bottom Navigation Bar Safe Area Padding */}
-        <View style={[styles.inputContainer, { paddingBottom }]}>
-          <TouchableOpacity 
-            style={[styles.attachToggleBtn, showAttachMenu && styles.attachToggleBtnActive]} 
-            onPress={() => setShowAttachMenu(!showAttachMenu)}
-          >
-            <Ionicons name={showAttachMenu ? "close" : "add"} size={24} color={showAttachMenu ? "#EF4444" : "#0F2C59"} />
-          </TouchableOpacity>
+        {/* Input Bar or Locked Overlay */}
+        {(!chatEnabled || !workerHasSubscription || bookingStatus === 'Pending') ? (
+          <View style={[styles.lockedInputBar, { paddingBottom: Math.max(paddingBottom, 12) }]}>
+            <TouchableOpacity disabled style={styles.attachToggleBtnDisabled}>
+              <Ionicons name="add" size={22} color="#9CA3AF" />
+            </TouchableOpacity>
+            <View style={styles.lockedInputBox}>
+              <Text style={styles.lockedInputText}>Chat is locked</Text>
+              <Ionicons name="lock-closed" size={16} color="#9CA3AF" />
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.inputContainer, { paddingBottom }]}>
+            <TouchableOpacity 
+              style={[styles.attachToggleBtn, showAttachMenu && styles.attachToggleBtnActive]} 
+              onPress={() => setShowAttachMenu(!showAttachMenu)}
+            >
+              <Ionicons name={showAttachMenu ? "close" : "add"} size={24} color={showAttachMenu ? "#EF4444" : "#0F2C59"} />
+            </TouchableOpacity>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message..."
-            value={inputText}
-            onChangeText={setInputText}
-            placeholderTextColor="#9CA3AF"
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Type a message..."
+              value={inputText}
+              onChangeText={setInputText}
+              placeholderTextColor="#9CA3AF"
+            />
 
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSendText}>
-            <Ionicons name="send" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity style={styles.sendBtn} onPress={handleSendText}>
+              <Ionicons name="send" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Full Image Preview Modal */}
@@ -865,7 +949,95 @@ const styles = StyleSheet.create({
   },
   actionSheetBtnCancelText: {
     color: '#6B7280',
-    fontWeight: '600',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3F4F6',
+    marginRight: 10,
+  },
+  serviceCategoryText: {
+    fontSize: 12,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  lockedCenterContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 36,
+    backgroundColor: '#FAFAFA',
+  },
+  largeLockCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#E6F4F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  lockedCenterTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1E2A38',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  lockedCenterSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  lockedReturnBtn: {
+    backgroundColor: '#0D9488',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  lockedReturnBtnText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  lockedInputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  attachToggleBtnDisabled: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  lockedInputBox: {
+    flex: 1,
+    height: 44,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  lockedInputText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
 });

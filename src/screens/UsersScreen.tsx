@@ -18,10 +18,11 @@ import StatusPill from '@/components/StatusPill';
 import { UserData } from '@/constants/mockData';
 import { API_URL } from '@/api';
 
-const getProfilePhotoUri = (photo: string | undefined): string => {
+const getProfilePhotoUri = (photo: string | undefined, name?: string): string => {
   const serverRoot = API_URL.replace('/api', '');
-  if (!photo) {
-    return `${serverRoot}/uploads/default-avatar.png`;
+  if (!photo || photo.includes('default-avatar') || photo.startsWith('assets/')) {
+    const displayName = name || 'User';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0F2C59&color=fff&bold=true`;
   }
   if (photo.startsWith('http://') || photo.startsWith('https://')) {
     return photo;

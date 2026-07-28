@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, StatusBar, Switch, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, StatusBar, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { API_URL as LOCAL_API_URL } from '../../config/api';
+import { ResponsiveContainer } from '../../components/ResponsiveContainer';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface Stats {
   todayLeads: number;
@@ -26,34 +28,10 @@ interface RecentLead {
   schedule?: string;
 }
 
-function categoryMatchesLead(workerCategoryString: string, leadTitle: string, leadDescription: string): boolean {
-  if (!workerCategoryString) return true;
-  
-  const workerCats = workerCategoryString.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
-  const title = (leadTitle || '').toLowerCase();
-  const desc = (leadDescription || '').toLowerCase();
-  
-  const keywordMap: Record<string, string[]> = {
-    electrician: ['electric', 'wiring', 'light', 'switch', 'power', 'fan', 'ac', 'appliance', 'fuse', 'wire', 'board'],
-    plumber: ['plumb', 'leak', 'pipe', 'tap', 'drain', 'water', 'basin', 'shower', 'sink', 'toilet'],
-    carpenter: ['carpent', 'wood', 'door', 'lock', 'furniture', 'cabinet', 'chair', 'table', 'hinge', 'bed'],
-    painter: ['paint', 'wall', 'waterproof', 'putty', 'color', 'colour', 'primer'],
-    cleaner: ['clean', 'wash', 'sweep', 'dust', 'sofa', 'kitchen', 'vacuum', 'housekeep']
-  };
-
-  return workerCats.some((cat) => {
-    if (title.includes(cat) || desc.includes(cat)) return true;
-    const keywords = keywordMap[cat];
-    if (keywords) {
-      return keywords.some(keyword => title.includes(keyword) || desc.includes(keyword));
-    }
-    return false;
-  });
-}
-
 export default function DashboardTab() {
   const { user, setUser, token } = useAuth();
   const router = useRouter();
+  const { isTablet, isDesktop } = useResponsive();
 
   const [stats, setStats] = useState<Stats>({
     todayLeads: 0,
@@ -113,7 +91,6 @@ export default function DashboardTab() {
     const userId = user?.id || (user as any)?._id;
     if (!userId) return;
     try {
-      // 1. Fetch Stats
       const statsRes = await fetch(`${LOCAL_API_URL}/worker/${userId}/dashboard`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
@@ -126,7 +103,6 @@ export default function DashboardTab() {
         }
       }
 
-      // 2. Fetch Subscription Status
       const subRes = await fetch(`${LOCAL_API_URL}/worker/${userId}/subscription`);
       if (subRes.ok) {
         const subData = await subRes.json();
@@ -134,7 +110,6 @@ export default function DashboardTab() {
         setSubscriptionData(subData);
       }
 
-      // 3. Fetch Recent Leads (Pending bookings of worker's profession)
       const leadsRes = await fetch(`${LOCAL_API_URL}/bookings/pending`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -142,12 +117,11 @@ export default function DashboardTab() {
       });
       if (leadsRes.ok) {
         const leadsData = await leadsRes.json();
-        const filtered = user?.mainCategory 
-          ? leadsData.filter((b: any) => {
-              if (b.workerId === userId) return true;
-              return categoryMatchesLead(user.mainCategory!, b.title, b.description);
-            })
-          : leadsData;
+        const userIdStr = String(userId);
+        const filtered = leadsData.filter((b: any) => {
+          if (!b.workerId) return false;
+          return String(b.workerId) === userIdStr;
+        });
         setRecentLeads(filtered.slice(0, 5));
       }
     } catch (err) {
@@ -187,7 +161,7 @@ export default function DashboardTab() {
   };
 
   return (
-    <View style={[styles.safeContainer, { paddingTop: insets.top }]}>
+    <ResponsiveContainer maxWidth={800}>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <ScrollView contentContainerStyle={[styles.scrollContainer, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         
@@ -208,7 +182,7 @@ export default function DashboardTab() {
           </View>
         </View>
 
-        {/* Warning Banner (Pending approval) */}
+        {/* Warning Banner */}
         {!user?.isApproved && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle-outline" size={20} color="#B45309" style={{ marginRight: 10, marginTop: 2 }} />
@@ -220,55 +194,50 @@ export default function DashboardTab() {
 
         {/* Numerical stats grid */}
         <Text style={styles.sectionHeader}>Performance Overview</Text>
-        <View style={styles.gridContainer}>
-          <View style={styles.gridRow}>
-            <View style={styles.gridCard}>
-              <Text style={styles.cardValue}>{(stats as any).completedJobs || 0}</Text>
-              <Text style={styles.cardLabel}>Completed Jobs</Text>
-            </View>
-            <View style={styles.gridCard}>
-              <Text style={styles.cardValue}>{stats.rating ? stats.rating.toFixed(1) : '5.0'} ★</Text>
-              <Text style={styles.cardLabel}>Average Rating</Text>
-            </View>
+        <View style={[styles.gridContainer, (isTablet || isDesktop) && styles.tabletGridContainer]}>
+          <View style={styles.gridCard}>
+            <Text style={styles.cardValue}>{(stats as any).completedJobs || 0}</Text>
+            <Text style={styles.cardLabel}>Completed Jobs</Text>
           </View>
-          
-          <View style={styles.gridRow}>
-            <View style={styles.gridCard}>
-              <Text style={styles.cardValue}>{stats.todayLeads || 0}</Text>
-              <Text style={styles.cardLabel}>Today's Leads</Text>
-            </View>
-            <View style={styles.gridCard}>
-              <Text style={styles.cardValue}>{stats.profileViews || 0}</Text>
-              <Text style={styles.cardLabel}>Profile Views</Text>
-            </View>
+          <View style={styles.gridCard}>
+            <Text style={styles.cardValue}>{stats.rating ? stats.rating.toFixed(1) : '5.0'} ★</Text>
+            <Text style={styles.cardLabel}>Average Rating</Text>
+          </View>
+          <View style={styles.gridCard}>
+            <Text style={styles.cardValue}>{stats.todayLeads || 0}</Text>
+            <Text style={styles.cardLabel}>Today's Leads</Text>
+          </View>
+          <View style={styles.gridCard}>
+            <Text style={styles.cardValue}>{stats.profileViews || 0}</Text>
+            <Text style={styles.cardLabel}>Profile Views</Text>
           </View>
         </View>
 
         {/* Quick Actions Row */}
         <Text style={styles.sectionHeader}>Quick Actions</Text>
         <View style={styles.quickActionsRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/leads')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/leads')} activeOpacity={0.7}>
             <View style={styles.actionIconBg}>
               <Ionicons name="briefcase-outline" size={22} color="#0F2C59" />
             </View>
             <Text style={styles.actionLabel}>Job Leads</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/chats')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/chats')} activeOpacity={0.7}>
             <View style={styles.actionIconBg}>
               <Ionicons name="chatbubbles-outline" size={22} color="#0F2C59" />
             </View>
             <Text style={styles.actionLabel}>Chats</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/profile')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/profile')} activeOpacity={0.7}>
             <View style={styles.actionIconBg}>
               <Ionicons name="person-outline" size={22} color="#0F2C59" />
             </View>
             <Text style={styles.actionLabel}>Profile</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/subscription')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/subscription')} activeOpacity={0.7}>
             <View style={styles.actionIconBg}>
               <Ionicons name="card-outline" size={22} color="#0F2C59" />
             </View>
@@ -299,7 +268,7 @@ export default function DashboardTab() {
         </View>
 
       </ScrollView>
-    </View>
+    </ResponsiveContainer>
   );
 }
 
@@ -308,10 +277,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F6FA',
-  },
-  safeContainer: {
-    flex: 1,
     backgroundColor: '#F5F6FA',
   },
   scrollContainer: {
@@ -370,15 +335,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   gridContainer: {
-    marginBottom: 24,
-    gap: 12,
-  },
-  gridRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
+    marginBottom: 24,
+  },
+  tabletGridContainer: {
+    justifyContent: 'space-between',
   },
   gridCard: {
-    flex: 1,
+    width: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 18,
@@ -389,6 +355,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
+    minHeight: 84,
   },
   cardValue: {
     fontSize: 22,
@@ -410,6 +377,7 @@ const styles = StyleSheet.create({
   actionBtn: {
     alignItems: 'center',
     flex: 1,
+    minHeight: 48,
   },
   actionIconBg: {
     width: 50,
@@ -455,15 +423,6 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 10,
     backgroundColor: '#EEF2F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  activityIconBgGreen: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#E6F4EA',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,

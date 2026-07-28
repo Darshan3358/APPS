@@ -69,7 +69,11 @@ export default function EditProfileScreen() {
               method: 'POST',
               body: formData,
             });
-            const data = await res.json();
+            const text = await res.text();
+            let data: any = {};
+            try { data = JSON.parse(text); } catch (e) {
+              if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+            }
             if (data.url || data.secure_url) {
               setSelectedPhoto(data.url || data.secure_url);
               Alert.alert('Success', 'Profile photo uploaded!');
@@ -95,9 +99,9 @@ export default function EditProfileScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+        allowsEditing: false, // Direct upload without crop option
+        quality: 0.7,
+        base64: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
@@ -107,51 +111,110 @@ export default function EditProfileScreen() {
       const asset = result.assets[0];
       setUploadingPhoto(true);
 
-      const formData = new FormData();
-      const filename = asset.uri.split('/').pop() || `profile_${Date.now()}.jpg`;
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
-        ? `file://${asset.uri}`
-        : asset.uri;
+      const userId = user?.id || (user as any)?._id;
 
-      formData.append('file', {
-        uri: fileUri,
-        name: filename,
-        type: asset.mimeType || type,
-      } as any);
-      formData.append('folder', 'customer_profiles');
+      // Attempt 1: Multipart FormData upload
+      let uploadSuccess = false;
+      if (userId) {
+        try {
+          const formData = new FormData();
+          const filename = asset.fileName || asset.uri.split('/').pop() || `profile_${Date.now()}.jpg`;
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+            ? `file://${asset.uri}`
+            : asset.uri;
 
-      let data: any;
-      if ((Platform.OS as string) === 'web') {
+          formData.append('profilePhoto', {
+            uri: fileUri,
+            name: filename,
+            type: asset.mimeType || type,
+          } as any);
+
+          const res = await fetch(`${LOCAL_API_URL}/users/${userId}/upload-profile-photo`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          const text = await res.text();
+          let data: any = {};
+          try { data = JSON.parse(text); } catch (e) {
+            if (!res.ok) throw new Error(`Server status ${res.status}`);
+          }
+
+          const photoUrl = data.profilePhoto || data.url || data.secure_url;
+          if (res.ok && photoUrl) {
+            setSelectedPhoto(photoUrl);
+            if (data.user && setUser) {
+              setUser({ ...data.user, id: data.user._id ? data.user._id.toString() : data.user.id });
+            }
+            Alert.alert('Success', 'Profile photo updated successfully!');
+            uploadSuccess = true;
+            return;
+          }
+        } catch (err) {
+          console.log('FormData upload failed, trying base64 fallback:', err);
+        }
+      }
+
+      if (uploadSuccess) return;
+
+      // Attempt 2: Base64 JSON upload fallback
+      const base64Uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      let data: any = {};
+      if (userId) {
+        const res = await fetch(`${LOCAL_API_URL}/users/${userId}/upload-profile-photo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profilePhoto: base64Uri }),
+        });
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          if (!res.ok) {
+            throw new Error(`Upload failed (Server status ${res.status}). Please check network connection.`);
+          }
+          throw new Error('Server returned invalid response.');
+        }
+      } else {
+        const formData = new FormData();
+        const filename = asset.fileName || asset.uri.split('/').pop() || `profile_${Date.now()}.jpg`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+          ? `file://${asset.uri}`
+          : asset.uri;
+
+        formData.append('file', {
+          uri: fileUri,
+          name: filename,
+          type: asset.mimeType || type,
+        } as any);
+        formData.append('folder', 'customer_profiles');
+
         const res = await fetch(`${LOCAL_API_URL}/upload`, {
           method: 'POST',
           body: formData,
         });
-        data = await res.json();
-      } else {
-        data = await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', `${LOCAL_API_URL}/upload`);
-          xhr.onload = () => {
-            try {
-              const parsed = JSON.parse(xhr.responseText);
-              if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(parsed);
-              } else {
-                reject(new Error(parsed.error || `Upload failed (${xhr.status})`));
-              }
-            } catch (e) {
-              reject(e);
-            }
-          };
-          xhr.onerror = () => reject(new Error('Network error uploading photo'));
-          xhr.send(formData);
-        });
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          if (!res.ok) {
+            throw new Error(`Upload failed (Server status ${res.status}). Please check network connection.`);
+          }
+          throw new Error('Server returned invalid response.');
+        }
       }
-      if (data.url || data.secure_url) {
-        setSelectedPhoto(data.url || data.secure_url);
-        Alert.alert('Success', 'Profile photo uploaded!');
+
+      const photoUrl = data.profilePhoto || data.url || data.secure_url;
+      if (photoUrl) {
+        setSelectedPhoto(photoUrl);
+        if (data.user && setUser) {
+          setUser({ ...data.user, id: data.user._id ? data.user._id.toString() : data.user.id });
+        }
+        Alert.alert('Success', 'Profile photo updated successfully!');
       } else {
         Alert.alert('Upload Failed', data.error || 'Failed to upload photo');
       }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,8 @@ interface ChatThread {
   lastMessage: string;
   timestamp: string;
   updatedAt: number;
+  bookingStatus?: string;
+  workerHasSubscription?: boolean;
 }
 
 export default function ChatsScreen() {
@@ -58,7 +60,16 @@ export default function ChatsScreen() {
   return (
     <SafeAreaView style={styles.safeContainer}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity 
+          style={styles.backBtn} 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/dashboard');
+            }
+          }}
+        >
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Messages</Text>
@@ -80,35 +91,58 @@ export default function ChatsScreen() {
               <Text style={styles.emptySubText}>When you book a service, you can message providers here.</Text>
             </View>
           ) : (
-            threads.map((thread) => (
-              <TouchableOpacity 
-                key={thread.bookingId} 
-                style={styles.threadItem}
-                onPress={() => router.push({
+            threads.map((thread) => {
+              const isLocked = thread.bookingStatus === 'Pending' || thread.workerHasSubscription === false;
+
+              const handleThreadPress = () => {
+                router.push({
                   pathname: '/chat-detail',
                   params: { 
                     bookingId: thread.bookingId, 
                     partnerId: thread.workerId,
                     partnerName: thread.workerName 
                   }
-                })}
-              >
-                {/* Avatar */}
-                <Image 
-                  source={{ uri: getProfilePhotoUri(thread.workerPhoto, thread.workerName) }}
-                  style={styles.avatar}
-                />
+                });
+              };
 
-                <View style={styles.threadContent}>
-                  <View style={styles.threadHeader}>
-                    <Text style={styles.workerName}>{thread.workerName}</Text>
-                    <Text style={styles.timestamp}>{thread.timestamp}</Text>
+              return (
+                <TouchableOpacity 
+                  key={thread.bookingId} 
+                  style={[styles.threadItem, isLocked && styles.threadItemLocked]}
+                  onPress={handleThreadPress}
+                >
+                  {/* Avatar with Lock Badge */}
+                  <View style={{ position: 'relative' }}>
+                    <Image 
+                      source={{ uri: getProfilePhotoUri(thread.workerPhoto, thread.workerName) }}
+                      style={styles.avatar}
+                    />
+                    {isLocked && (
+                      <View style={styles.avatarLockBadge}>
+                        <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.jobTitle} numberOfLines={1}>{thread.jobTitle}</Text>
-                  <Text style={styles.lastMessage} numberOfLines={1}>{thread.lastMessage}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
+
+                  <View style={styles.threadContent}>
+                    <View style={styles.threadHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.workerName}>{thread.workerName}</Text>
+                        {isLocked && <Ionicons name="lock-closed" size={14} color="#E11D48" />}
+                      </View>
+                      <Text style={styles.timestamp}>{thread.timestamp}</Text>
+                    </View>
+                    <Text style={styles.jobTitle} numberOfLines={1}>{thread.jobTitle}</Text>
+                    <Text style={[styles.lastMessage, isLocked && styles.lockedMessageText]} numberOfLines={1}>
+                      {isLocked 
+                        ? (thread.bookingStatus === 'Pending' ? '🔒 Waiting for worker to accept booking' : '🔒 Waiting for worker subscription')
+                        : thread.lastMessage
+                      }
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
         </ScrollView>
       )}
@@ -216,5 +250,25 @@ const styles = StyleSheet.create({
   lastMessage: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  threadItemLocked: {
+    backgroundColor: '#FEF2F2',
+  },
+  avatarLockBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#E11D48',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  lockedMessageText: {
+    color: '#E11D48',
+    fontWeight: '600',
   },
 });
