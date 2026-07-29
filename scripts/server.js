@@ -3390,7 +3390,7 @@ app.get('/api/worker/bookings', auth, async (req, res) => {
         { workerId: req.user.id },
         { workerId: String(req.user._id) },
         ...(req.user.uid ? [{ workerId: req.user.uid }] : []),
-        ...(workerName ? [{ workerName: workerName }] : [])
+        ...(workerName ? [{ workerId: workerName }] : [])
       ]
     }).sort({ createdAt: -1 }).toArray();
 
@@ -3411,13 +3411,24 @@ app.get('/api/worker/bookings', auth, async (req, res) => {
 app.get('/api/customer/bookings', auth, async (req, res) => {
   try {
     const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const userEmail = req.user.email || '';
+    const userName = req.user.name || '';
+
+    const orConditions = [
+      { customerId: userIdStr },
+      { customerId: req.user.id },
+      { customerId: String(req.user._id) },
+      ...(req.user.uid ? [{ customerId: req.user.uid }] : []),
+      ...(userEmail ? [{ customerEmail: userEmail }, { email: userEmail }] : []),
+      ...(userName ? [{ customerName: userName }] : [])
+    ];
+
+    if (ObjectId.isValid(userIdStr)) {
+      orConditions.push({ customerId: new ObjectId(userIdStr) });
+    }
+
     const bookings = await db.collection('bookings').find({
-      $or: [
-        { customerId: userIdStr },
-        { customerId: req.user.id },
-        { customerId: String(req.user._id) },
-        ...(req.user.uid ? [{ customerId: req.user.uid }] : [])
-      ]
+      $or: orConditions
     }).sort({ createdAt: -1 }).toArray();
 
     res.json(bookings);
