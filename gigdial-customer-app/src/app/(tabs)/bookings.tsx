@@ -82,13 +82,19 @@ export default function BookingsScreen() {
       if (user?.email) {
         headers['X-User-Email'] = user.email;
       }
-      const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
-      const res = await fetch(`${LOCAL_API_URL}/customer/bookings${emailParam}`, {
+      const params = new URLSearchParams();
+      if (user?.email) params.append('email', user.email);
+      if (user?.name) {
+        params.append('customerName', user.name);
+        params.append('name', user.name);
+      }
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${LOCAL_API_URL}/customer/bookings${queryString}`, {
         headers
       });
       if (res.ok) {
         const data = await res.json();
-        setBookings(data);
+        setBookings(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Failed to fetch customer bookings:', err);
