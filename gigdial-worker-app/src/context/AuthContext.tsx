@@ -29,7 +29,7 @@ interface AuthContextType {
   logout: () => void;
   registerStep1: (data: any) => Promise<{ success: boolean; error?: string }>;
   registerStep2: (data: any) => Promise<{ success: boolean; error?: string }>;
-  registerStep3: (serviceType: string, skills: string[], aadhaarUri: string, panUri: string, aadhaarFileWeb?: any, panFileWeb?: any) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; email?: string }>;
+  registerStep3: (serviceType: string, skills: string[], aadhaarUri: string, panUri: string, aadhaarFileWeb?: any, panFileWeb?: any, experienceCertUri?: string, experienceCertFileWeb?: any) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; email?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   tempRegData: any;
   setTempRegData: React.Dispatch<React.SetStateAction<any>>;
@@ -227,7 +227,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     aadhaarUri: string,
     panUri: string,
     aadhaarFileWeb?: any,
-    panFileWeb?: any
+    panFileWeb?: any,
+    experienceCertUri?: string,
+    experienceCertFileWeb?: any
   ) => {
     try {
       const formData = new FormData();
@@ -257,6 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if ((Platform.OS as string) === 'web') {
         if (aadhaarFileWeb) formData.append('aadhaarCard', aadhaarFileWeb);
         if (panFileWeb) formData.append('panCard', panFileWeb);
+        if (experienceCertFileWeb) formData.append('experienceCertificate', experienceCertFileWeb);
       } else {
         if (aadhaarUri) {
           let fileUri = aadhaarUri;
@@ -289,6 +292,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const fileType = (panFileWeb && panFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
 
           formData.append('panCard', {
+            uri: fileUri,
+            name: fileName,
+            type: fileType
+          } as any);
+        }
+        if (experienceCertUri) {
+          let fileUri = experienceCertUri;
+          if (experienceCertFileWeb && experienceCertFileWeb.uri && !experienceCertFileWeb.uri.startsWith('data:')) {
+            fileUri = experienceCertFileWeb.uri;
+          }
+          if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
+            fileUri = `file://${fileUri}`;
+          }
+          const fileName = (experienceCertFileWeb && experienceCertFileWeb.name) || fileUri.split('/').pop() || 'experience_cert.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = (experienceCertFileWeb && experienceCertFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
+
+          formData.append('experienceCertificate', {
             uri: fileUri,
             name: fileName,
             type: fileType

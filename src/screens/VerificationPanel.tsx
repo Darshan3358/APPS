@@ -24,6 +24,7 @@ interface WorkerRequest {
   profilePhoto?: string;
   aadhaarCard?: string;
   panCard?: string;
+  experienceCertificate?: string;
   isApproved: boolean;
   createdAt?: string;
   joinedDate?: string;
@@ -170,6 +171,19 @@ export default function VerificationPanel({
                       <Ionicons name="image-outline" size={20} color="#3B5BFF" />
                       <Text style={styles.docBoxText}>Photo</Text>
                       {w.profilePhoto ? <View style={styles.dotIndicator} /> : null}
+                    </TouchableOpacity>
+
+                    {/* Experience Certificate Box */}
+                    <TouchableOpacity 
+                      style={styles.docBox}
+                      onPress={() => {
+                        if (w.experienceCertificate) setPreviewImage(getPhotoUri(w.experienceCertificate));
+                        else alert('Experience certificate not uploaded');
+                      }}
+                    >
+                      <Ionicons name="ribbon-outline" size={20} color="#3B5BFF" />
+                      <Text style={styles.docBoxText}>Exp Cert</Text>
+                      {w.experienceCertificate ? <View style={styles.dotIndicator} /> : null}
                     </TouchableOpacity>
                   </View>
 

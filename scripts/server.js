@@ -807,6 +807,7 @@ app.get('/api/users/all', async (req, res) => {
         isApproved: u.isApproved ?? false,
         aadhaarCard: u.aadhaarCard || '',
         panCard: u.panCard || '',
+        experienceCertificate: u.experienceCertificate || '',
         kycStatus: u.kycStatus || (role === 'worker' ? (u.isApproved ? 'approved' : 'pending') : 'active')
       });
     }
@@ -840,6 +841,7 @@ app.get('/api/users/all', async (req, res) => {
           isApproved: w.isApproved ?? false,
           aadhaarCard: userDoc ? userDoc.aadhaarCard : (w.aadhaarCard || ''),
           panCard: userDoc ? userDoc.panCard : (w.panCard || ''),
+          experienceCertificate: userDoc ? (userDoc.experienceCertificate || '') : (w.experienceCertificate || ''),
           kycStatus: w.kycStatus || (userDoc ? userDoc.kycStatus : null) || (w.isApproved ? 'approved' : 'pending')
         });
       }
@@ -1050,6 +1052,7 @@ app.get('/api/workers', async (req, res) => {
         email: u.email,
         aadhaarCard: u.aadhaarCard || '',
         panCard: u.panCard || '',
+        experienceCertificate: u.experienceCertificate || '',
         isBlocked: u.isBlocked ?? false
       });
     }
@@ -1077,6 +1080,7 @@ app.get('/api/workers', async (req, res) => {
         // Prefer userDoc for KYC docs, fallback to worker doc
         const aadhaarCard = (userDoc && userDoc.aadhaarCard) ? userDoc.aadhaarCard : (w.aadhaarCard || '');
         const panCard = (userDoc && userDoc.panCard) ? userDoc.panCard : (w.panCard || '');
+        const experienceCertificate = (userDoc && userDoc.experienceCertificate) ? userDoc.experienceCertificate : (w.experienceCertificate || '');
 
         merged.push({
           _id: w._id,
@@ -1089,6 +1093,7 @@ app.get('/api/workers', async (req, res) => {
           role: userDoc ? userDoc.role : (w.role || 'worker'),
           aadhaarCard,
           panCard,
+          experienceCertificate,
           isBlocked: w.isBlocked ?? (userDoc ? userDoc.isBlocked : false) ?? false
         });
       }
@@ -2570,7 +2575,8 @@ app.post('/api/auth/register/step2', async (req, res) => {
 // Step 3: Final Submission (Create User & Worker Atomically)
 app.post('/api/auth/register/step3', upload.fields([
   { name: 'aadhaarCard', maxCount: 1 },
-  { name: 'panCard', maxCount: 1 }
+  { name: 'panCard', maxCount: 1 },
+  { name: 'experienceCertificate', maxCount: 1 }
 ]), async (req, res) => {
   try {
     const {
@@ -2597,6 +2603,7 @@ app.post('/api/auth/register/step3', upload.fields([
     // Process files (upload directly to Cloudinary)
     let aadhaarCardUrl = "";
     let panCardUrl = "";
+    let experienceCertificateUrl = "";
 
     if (req.files && req.files['aadhaarCard'] && req.files['aadhaarCard'][0]) {
       const result = await uploadFromBuffer(req.files['aadhaarCard'][0].buffer, 'kyc/aadhaar');
@@ -2605,6 +2612,10 @@ app.post('/api/auth/register/step3', upload.fields([
     if (req.files && req.files['panCard'] && req.files['panCard'][0]) {
       const result = await uploadFromBuffer(req.files['panCard'][0].buffer, 'kyc/pan');
       panCardUrl = result.secure_url;
+    }
+    if (req.files && req.files['experienceCertificate'] && req.files['experienceCertificate'][0]) {
+      const result = await uploadFromBuffer(req.files['experienceCertificate'][0].buffer, 'kyc/certificates');
+      experienceCertificateUrl = result.secure_url;
     }
 
     if (!aadhaarCardUrl || !panCardUrl) {
@@ -2654,6 +2665,7 @@ app.post('/api/auth/register/step3', upload.fields([
       additionalSkills: parsedSkills,
       aadhaarCard: aadhaarCardUrl,
       panCard: panCardUrl,
+      experienceCertificate: experienceCertificateUrl,
       aadhaarNumber: aadhaarNumber ? aadhaarNumber.trim() : "",
       panNumber: panNumber ? panNumber.trim() : "",
       createdAt: new Date(),
@@ -2686,7 +2698,8 @@ app.post('/api/auth/register/step3', upload.fields([
         serviceType: serviceType.trim(),
         additionalSkills: parsedSkills,
         aadhaarCard: aadhaarCardUrl,
-        panCard: panCardUrl
+        panCard: panCardUrl,
+        experienceCertificate: experienceCertificateUrl
       },
       workerData: {
         name: name.trim(),
@@ -2703,7 +2716,8 @@ app.post('/api/auth/register/step3', upload.fields([
         city: city.trim(),
         isApproved: false,
         aadhaarCard: aadhaarCardUrl,
-        panCard: panCardUrl
+        panCard: panCardUrl,
+        experienceCertificate: experienceCertificateUrl
       },
       createdAt: new Date()
     };

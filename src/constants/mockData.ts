@@ -13,6 +13,7 @@ export interface UserData {
   isApproved?: boolean;
   aadhaarCard?: string;
   panCard?: string;
+  experienceCertificate?: string;
   kycStatus?: string;
 }
 
@@ -27,6 +28,7 @@ export interface WorkerData {
   profilePhoto?: string;
   aadhaarCard?: string;
   panCard?: string;
+  experienceCertificate?: string;
 }
 
 export interface BookingData {

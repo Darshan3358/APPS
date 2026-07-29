@@ -45,7 +45,10 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "0073a421-417c-410a-b430-89c6678245b4"
+      }
     },
     "owner": "dharmik12"
   }

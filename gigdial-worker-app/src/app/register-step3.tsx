@@ -23,6 +23,8 @@ export default function RegisterStep3() {
   
   const [aadhaarFile, setAadhaarFile] = useState<any>(null);
   const [panFile, setPanFile] = useState<any>(null);
+  const [experienceCertUri, setExperienceCertUri] = useState<string>('');
+  const [experienceCertFile, setExperienceCertFile] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -133,6 +135,52 @@ export default function RegisterStep3() {
     }
   };
 
+  const handlePickExperienceCert = async () => {
+    if ((Platform.OS as string) === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,application/pdf';
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          setExperienceCertFile(file);
+          setExperienceCertUri(URL.createObjectURL(file));
+        }
+      };
+      input.click();
+    } else {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Permission to access media library is required to select photos.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets && result.assets[0]) {
+          const asset = result.assets[0];
+          const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+            ? `file://${asset.uri}`
+            : asset.uri;
+          const fileName = asset.fileName || asset.uri.split('/').pop() || 'experience_cert.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
+
+          setExperienceCertUri(fileUri);
+          setExperienceCertFile({
+            uri: fileUri,
+            name: fileName,
+            type: fileType
+          });
+        }
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to select document from gallery.');
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     setSubmitError('');
     if (!serviceType) {
@@ -157,7 +205,9 @@ export default function RegisterStep3() {
         aadhaarUri,
         panUri,
         aadhaarFile,
-        panFile
+        panFile,
+        experienceCertUri,
+        experienceCertFile
       );
       setSubmitting(false);
 
@@ -299,6 +349,24 @@ export default function RegisterStep3() {
             )}
           </TouchableOpacity>
 
+          {/* Experience Certificate (Optional) Upload Box */}
+          <Text style={styles.label}>
+            Experience Certificate <Text style={styles.optionalTag}>(Optional)</Text>
+          </Text>
+          <TouchableOpacity style={styles.uploadBox} onPress={handlePickExperienceCert}>
+            {experienceCertUri ? (
+              <View style={styles.uploadedContent}>
+                <Ionicons name="checkmark-circle-outline" size={24} color="#0D9488" />
+                <Text style={styles.uploadedTitle}>Experience Certificate Selected</Text>
+              </View>
+            ) : (
+              <View style={styles.uploadPlaceholder}>
+                <Ionicons name="document-text-outline" size={24} color="#9CA3AF" />
+                <Text style={styles.uploadPlaceholderTitle}>Upload Experience Certificate (Optional)</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity 
             style={[styles.submitBtn, submitting && styles.disabledBtn]} 
             onPress={handleSubmit} 
@@ -413,6 +481,11 @@ const styles = StyleSheet.create({
     color: '#0F2C59',
     marginBottom: 8,
     marginTop: 12,
+  },
+  optionalTag: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#6B7280',
   },
   serviceTypeRow: {
     flexDirection: 'row',

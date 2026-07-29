@@ -27,6 +27,7 @@ interface ProfessionalData {
   isApproved: boolean;
   aadhaarCard?: string;
   panCard?: string;
+  experienceCertificate?: string;
   role?: string;
   isBlocked?: boolean;
   createdAt?: string;
@@ -390,6 +391,15 @@ export default function ProfessionalsManagement({
                     </TouchableOpacity>
                   ) : (
                     <Text style={modalStyles.noDocText}>PAN Card not uploaded</Text>
+                  )}
+
+                  <Text style={modalStyles.docLabel}>Experience Certificate (Click to view full screen)</Text>
+                  {selectedWorker.experienceCertificate ? (
+                    <TouchableOpacity onPress={() => setFullscreenImage(getPhotoUri(selectedWorker.experienceCertificate))}>
+                      <Image source={{ uri: getPhotoUri(selectedWorker.experienceCertificate) }} style={modalStyles.docImage} resizeMode="contain" />
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={modalStyles.noDocText}>Experience Certificate not uploaded (Optional)</Text>
                   )}
                 </View>
 
