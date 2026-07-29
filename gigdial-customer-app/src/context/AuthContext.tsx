@@ -153,7 +153,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, error: formatErrorMessage(data.error || 'Login failed') };
       }
 
-      setUser(data.user);
+      const mappedUser = {
+        ...data.user,
+        id: data.user.id || (data.user._id ? data.user._id.toString() : '')
+      };
+      setUser(mappedUser);
       setToken(data.token || 'mock-token');
       return { success: true };
     } catch (err: any) {

@@ -3423,16 +3423,23 @@ app.get('/api/worker/bookings', auth, async (req, res) => {
 app.get('/api/customer/bookings', auth, async (req, res) => {
   try {
     const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
-    const userEmail = req.user.email || '';
-    const userName = req.user.name || '';
+    const userEmail = (req.user.email || '').trim();
+    const userName = (req.user.name || '').trim();
+
+    const escapeRegex = (str) => str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
     const orConditions = [
       { customerId: userIdStr },
       { customerId: req.user.id },
       { customerId: String(req.user._id) },
       ...(req.user.uid ? [{ customerId: req.user.uid }] : []),
-      ...(userEmail ? [{ customerEmail: userEmail }, { email: userEmail }] : []),
-      ...(userName ? [{ customerName: userName }] : [])
+      ...(userEmail ? [
+        { customerEmail: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } },
+        { email: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } }
+      ] : []),
+      ...(userName ? [
+        { customerName: { $regex: new RegExp(`^${escapeRegex(userName)}$`, 'i') } }
+      ] : [])
     ];
 
     if (ObjectId.isValid(userIdStr)) {

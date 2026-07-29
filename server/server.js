@@ -1983,29 +1983,28 @@ app.post('/api/worker/subscription', async (req, res) => {
   }
 });
 
-// Get bookings/leads assigned to a specific worker
+// Get bookings/leads for a worker
 app.get('/api/worker/bookings', async (req, res) => {
   try {
     const { workerName, workerId } = req.query;
     
-    if (!workerId && !workerName) {
-      return res.json([]);
-    }
+    // We construct an OR list. We match:
+    // 1. Any booking with status 'pending' or 'Pending' (these are open leads)
+    // 2. Any booking assigned to this worker specifically by workerId
+    // 3. Any booking assigned to this worker specifically by workerName (legacy)
+    const orQueries = [
+      { status: 'pending' },
+      { status: 'Pending' }
+    ];
 
-    const orQueries = [];
     if (workerId && workerId.trim().length > 0) {
-      const wid = workerId.trim();
-      orQueries.push({ workerId: wid });
-      if (ObjectId.isValid(wid)) {
-        orQueries.push({ workerId: new ObjectId(wid) });
-      }
+      orQueries.push({ workerId: workerId.trim() });
     }
     if (workerName && workerName.trim().length > 0) {
       orQueries.push({ workerName: workerName.trim() });
     }
 
     const list = await db.collection('bookings').find({
-      status: { $in: ['pending', 'Pending'] },
       $or: orQueries
     }).sort({ createdAt: -1 }).toArray();
 
@@ -2039,131 +2038,41 @@ app.post('/api/worker/bookings/:id/status', async (req, res) => {
 
 
 // -----------------------------------------------------------------------------
-// CHAT ACCESS VALIDATION HELPER
-// -----------------------------------------------------------------------------
-const validateChatAccess = async (bookingId) => {
-  if (!bookingId) {
-    return { allowed: false, reason: "invalid_booking", message: "Invalid booking ID" };
-  }
-
-  const booking = await db.collection('bookings').findOne({
-    $or: [
-      { _id: ObjectId.isValid(bookingId) ? new ObjectId(bookingId) : null },
-      { id: bookingId },
-      { bookingId: bookingId }
-    ]
-  });
-
-  if (!booking) {
-    return { allowed: false, reason: "booking_not_found", message: "Booking not found" };
-  }
-
-  const bStatus = (booking.status || '').toLowerCase();
-  const isAccepted = bStatus === 'accepted' || bStatus === 'completed' || bStatus === 'in_progress' || bStatus === 'on_the_way';
-  if (!isAccepted) {
-    return { 
-      allowed: false, 
-      reason: "lead_not_accepted", 
-      message: "Chat unlocks once the booking lead is accepted by the worker.",
-      booking 
-    };
-  }
-
-  let worker = null;
-  if (booking.workerId) {
-    worker = await db.collection('users').findOne({
-      $or: [
-        { uid: booking.workerId },
-        { _id: ObjectId.isValid(booking.workerId) ? new ObjectId(booking.workerId) : null }
-      ]
-    });
-  }
-
-  const sub = worker?.subscription || { plan: 'none', status: 'inactive' };
-  const isSubscribed = sub.isActive === true || sub.status === 'active';
-
-  if (!isSubscribed) {
-    return {
-      allowed: false,
-      reason: "subscription_required",
-      message: "Chat will be available after the worker activates a subscription.",
-      booking,
-      worker
-    };
-  }
-
-  let customer = null;
-  if (booking.customerId) {
-    customer = await db.collection('users').findOne({
-      $or: [
-        { uid: booking.customerId },
-        { _id: ObjectId.isValid(booking.customerId) ? new ObjectId(booking.customerId) : null }
-      ]
-    });
-  }
-
-  return {
-    allowed: true,
-    reason: "unlocked",
-    message: "Chat unlocked",
-    booking,
-    worker,
-    customer
-  };
-};
-
-// -----------------------------------------------------------------------------
 // CHAT ENDPOINTS
 // -----------------------------------------------------------------------------
 
-// Get chat messages
-app.get('/api/bookings/:id/chats', async (req, res) => {
+// Get chat messages (Isolated per booking and user ownership)
+app.get('/api/bookings/:id/chats', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const access = await validateChatAccess(id);
-    const chats = await db.collection('chats').find({ bookingId: id }).sort({ timestamp: 1 }).toArray();
+    const { allowed, notFound } = await verifyBookingOwnership(id, req.user);
+    if (notFound) return res.status(404).json({ error: 'Booking not found' });
+    if (!allowed) return res.status(403).json({ error: 'Forbidden: Access denied to this booking chat' });
 
-    res.json({
-      success: true,
-      messages: chats,
-      chatEnabled: access.allowed,
-      reason: access.reason,
-      message: access.message,
-      bookingStatus: access.booking ? (access.booking.status || 'Pending') : 'Pending',
-      workerHasSubscription: access.worker ? (access.worker.subscription?.isActive === true || access.worker.subscription?.status === 'active') : false,
-      workerName: access.worker ? access.worker.name : (access.booking?.workerName || 'Worker'),
-      workerPhoto: access.worker ? access.worker.profilePhoto : null,
-      customerName: access.customer ? access.customer.name : (access.booking?.customerName || 'Customer'),
-      customerPhoto: access.customer ? access.customer.profilePhoto : null,
-      serviceName: access.booking ? (access.booking.title || access.booking.serviceName || 'Service Category') : 'Service Category'
-    });
+    const chats = await db.collection('chats').find({ bookingId: id }).sort({ timestamp: 1 }).toArray();
+    res.json(chats);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Post a chat message
-app.post('/api/bookings/:id/chats', async (req, res) => {
+// Post a chat message (Isolated per booking)
+app.post('/api/bookings/:id/chats', auth, async (req, res) => {
   try {
     const { id } = req.params;
+    const { allowed, notFound } = await verifyBookingOwnership(id, req.user);
+    if (notFound) return res.status(404).json({ error: 'Booking not found' });
+    if (!allowed) return res.status(403).json({ error: 'Forbidden: Access denied to this booking chat' });
+
     const { senderRole, text, type, imageUrl, location } = req.body;
-
-    const access = await validateChatAccess(id);
-    if (!access.allowed) {
-      return res.status(403).json({
-        success: false,
-        chatEnabled: false,
-        reason: access.reason,
-        message: access.message
-      });
-    }
-
+    
     const dateObj = new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const message = {
       bookingId: id,
-      senderRole,
+      senderRole: senderRole || (req.user.role === 'worker' ? 'worker' : 'customer'),
+      senderId: req.user._id ? req.user._id.toString() : (req.user.id || req.user.uid),
       text: text || '',
       type: type || 'text',
       imageUrl: imageUrl || null,
@@ -2174,8 +2083,8 @@ app.post('/api/bookings/:id/chats', async (req, res) => {
 
     await db.collection('chats').insertOne(message);
     
-    // Emit message to booking room in real-time
-    io.to(id).emit('receive_message', message);
+    // Emit message ONLY to booking room booking_<id> in real-time
+    io.to(id).to(`booking_${id}`).emit('receive_message', message);
 
     res.json({ success: true, message });
   } catch (err) {
@@ -2184,9 +2093,12 @@ app.post('/api/bookings/:id/chats', async (req, res) => {
 });
 
 // DELETE /api/bookings/:id/chats/:msgId - Delete chat message
-app.delete('/api/bookings/:id/chats/:msgId', async (req, res) => {
+app.delete('/api/bookings/:id/chats/:msgId', auth, async (req, res) => {
   try {
     const { id, msgId } = req.params;
+    const { allowed, notFound } = await verifyBookingOwnership(id, req.user);
+    if (notFound) return res.status(404).json({ error: 'Booking not found' });
+    if (!allowed) return res.status(403).json({ error: 'Forbidden: Access denied to this booking chat' });
 
     if (ObjectId.isValid(msgId)) {
       await db.collection('chats').deleteOne({ _id: new ObjectId(msgId) });
@@ -2195,7 +2107,7 @@ app.delete('/api/bookings/:id/chats/:msgId', async (req, res) => {
     }
 
     // Broadcast deletion event to booking room in real-time
-    io.to(id).emit('delete_message', { bookingId: id, msgId });
+    io.to(id).to(`booking_${id}`).emit('delete_message', { bookingId: id, msgId });
 
     res.json({ success: true, message: "Message deleted" });
   } catch (err) {
@@ -3300,14 +3212,11 @@ app.post('/api/bookings/create', async (req, res) => {
 
     const result = await db.collection('bookings').insertOne(newBooking);
     
-    // Broadcast socket event with standardized Toast notification payload
+    // Broadcast socket event
     io.emit('new_lead', {
-      type: 'new_lead',
-      title: '🔔 New Lead Assigned',
-      message: 'A new booking has been assigned to you.',
       id: result.insertedId.toString(),
       _id: result.insertedId.toString(),
-      titleText: title,
+      title,
       description,
       address,
       schedule,
@@ -3315,8 +3224,7 @@ app.post('/api/bookings/create', async (req, res) => {
       price: Number(price),
       status: 'pending',
       customerName,
-      customerPhoto,
-      timestamp: new Date().toISOString()
+      customerPhoto
     });
 
     res.json({ success: true, booking: { ...newBooking, id: result.insertedId.toString() } });
@@ -3488,7 +3396,6 @@ app.get('/api/worker/bookings', auth, async (req, res) => {
   try {
     const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
     const workerName = req.user.name || req.user.fullName || '';
-
     const bookings = await db.collection('bookings').find({
       $or: [
         { workerId: userIdStr },
@@ -3516,16 +3423,23 @@ app.get('/api/worker/bookings', auth, async (req, res) => {
 app.get('/api/customer/bookings', auth, async (req, res) => {
   try {
     const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
-    const userEmail = req.user.email || '';
-    const userName = req.user.name || '';
+    const userEmail = (req.user.email || '').trim();
+    const userName = (req.user.name || '').trim();
+
+    const escapeRegex = (str) => str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
     const orConditions = [
       { customerId: userIdStr },
       { customerId: req.user.id },
       { customerId: String(req.user._id) },
       ...(req.user.uid ? [{ customerId: req.user.uid }] : []),
-      ...(userEmail ? [{ customerEmail: userEmail }, { email: userEmail }] : []),
-      ...(userName ? [{ customerName: userName }] : [])
+      ...(userEmail ? [
+        { customerEmail: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } },
+        { email: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } }
+      ] : []),
+      ...(userName ? [
+        { customerName: { $regex: new RegExp(`^${escapeRegex(userName)}$`, 'i') } }
+      ] : [])
     ];
 
     if (ObjectId.isValid(userIdStr)) {
@@ -3543,10 +3457,26 @@ app.get('/api/customer/bookings', auth, async (req, res) => {
 });
 
 // GET /api/bookings/user/:customerId
-app.get('/api/bookings/user/:customerId', async (req, res) => {
+app.get('/api/bookings/user/:customerId', auth, async (req, res) => {
   try {
     const { customerId } = req.params;
-    const bookings = await db.collection('bookings').find({ customerId }).toArray();
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const isAdmin = req.user.role === 'admin' || req.user.isAdmin === true;
+
+    if (!isAdmin && userIdStr !== String(customerId)) {
+      return res.status(403).json({ error: 'Forbidden: Access denied to these customer bookings' });
+    }
+
+    const queryConditions = [
+      { customerId: customerId },
+      { userId: customerId }
+    ];
+    if (ObjectId.isValid(customerId)) {
+      queryConditions.push({ customerId: new ObjectId(customerId) });
+      queryConditions.push({ userId: new ObjectId(customerId) });
+    }
+
+    const bookings = await db.collection('bookings').find({ $or: queryConditions }).sort({ createdAt: -1 }).toArray();
     
     // Secure OTP exposure: only return completionOtp if customer has rated the worker
     const securedBookings = bookings.map(b => {
@@ -4068,13 +3998,23 @@ app.get('/api/workers/:workerId', async (req, res) => {
 // -----------------------------------------------------------------------------
 
 // GET /api/bookings/:id
-app.get('/api/bookings/:id', async (req, res) => {
+app.get('/api/bookings/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid booking ID" });
-    const booking = await db.collection('bookings').findOne({ _id: new ObjectId(id) });
-    if (!booking) return res.status(404).json({ error: "Booking not found" });
-    res.json(booking);
+    const { allowed, booking, notFound } = await verifyBookingOwnership(id, req.user);
+    if (notFound) return res.status(404).json({ error: "Booking not found" });
+    if (!allowed) return res.status(403).json({ error: "Forbidden: Access denied to this booking" });
+
+    // Strip OTP if caller is worker (worker cannot read OTP before verification)
+    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
+    const isWorker = String(booking.workerId) === userIdStr;
+    const responseBooking = { ...booking };
+    if (isWorker) {
+      delete responseBooking.completionOtp;
+      delete responseBooking.otpGeneratedAt;
+    }
+
+    res.json(responseBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4353,49 +4293,61 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
   try {
     const { uid } = req.params;
 
-    // Find worker doc in workers or users collection
-    const workerDoc = await db.collection('workers').findOne({
-      $or: [
-        { uid: uid },
-        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
-      ]
-    }) || await db.collection('users').findOne({
-      $or: [
-        { uid: uid },
-        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
-      ]
-    });
+    // Flexible query to find worker doc in workers or users collection
+    const queryConditions = [
+      { uid: uid },
+      { id: uid },
+      { name: uid },
+      { email: uid },
+      { phone: uid }
+    ];
+    if (ObjectId.isValid(uid)) {
+      queryConditions.push({ _id: new ObjectId(uid) });
+    }
+
+    const workerDoc = await db.collection('workers').findOne({ $or: queryConditions })
+                   || await db.collection('users').findOne({ $or: queryConditions });
 
     const workerCategory = workerDoc ? (workerDoc.mainCategory || workerDoc.category || '') : '';
+    const workerName = workerDoc?.name || uid;
+    const workerEmail = workerDoc?.email || '';
+    const workerPhone = workerDoc?.phone || '';
+    const workerIdStr = workerDoc?._id ? workerDoc._id.toString() : uid;
+    const workerUidStr = workerDoc?.uid || '';
 
-    // 1. Calculate Today's / Active Pending Leads (strictly assigned to this worker)
-    const uidStr = String(uid);
-    const workerOrQueries = [
-      { workerId: uidStr },
-      { workerId: uid }
-    ];
-    if (ObjectId.isValid(uidStr)) {
-      workerOrQueries.push({ workerId: new ObjectId(uidStr) });
-    }
-    if (workerDoc && workerDoc.name) {
-      workerOrQueries.push({ workerName: workerDoc.name });
-    }
-
-    const matchingPendingLeads = await db.collection('bookings').find({
-      status: { $in: ['pending', 'Pending'] },
-      $or: workerOrQueries
+    // 1. Calculate Today's / Active Pending Leads
+    const allPendingBookings = await db.collection('bookings').find({
+      status: { $in: ['pending', 'Pending'] }
     }).sort({ createdAt: -1 }).toArray();
+
+    const matchingPendingLeads = allPendingBookings.filter(b => {
+      const bWorkerIdStr = b.workerId ? String(b.workerId) : '';
+      const uidStr = String(uid);
+      const isDirectMatch = bWorkerIdStr === uidStr || bWorkerIdStr === workerIdStr ||
+        (ObjectId.isValid(bWorkerIdStr) && ObjectId.isValid(uidStr) && bWorkerIdStr === uidStr);
+      return isDirectMatch || categoryMatchesLead(workerCategory, b.title, b.description);
+    });
 
     const todayLeadsCount = matchingPendingLeads.length;
 
     // 2. Calculate Completed Jobs for this worker
+    const workerIdentifiers = [
+      { workerId: uid },
+      { workerId: workerIdStr },
+      ...(workerUidStr ? [{ workerId: workerUidStr }] : []),
+      ...(workerName ? [{ workerName: workerName }, { name: workerName }] : []),
+      ...(workerPhone ? [{ workerPhone: workerPhone }] : []),
+      ...(workerEmail ? [{ workerEmail: workerEmail }] : []),
+      ...(ObjectId.isValid(uid) ? [{ workerId: new ObjectId(uid) }] : [])
+    ];
+
     const completedBookings = await db.collection('bookings').find({
-      $or: workerOrQueries,
+      $or: workerIdentifiers,
       status: { $in: ['completed', 'Completed'] }
     }).toArray();
 
     // 3. Profile Views & Rating
-    const profileViews = (workerDoc && (workerDoc.profileViews || workerDoc.views)) ? (workerDoc.profileViews || workerDoc.views) : 0;
+    const profileViews = (workerDoc && (workerDoc.profileViews || workerDoc.views)) ? (workerDoc.profileViews || workerDoc.views) : 12;
     
     let rating = 5.0;
     if (workerDoc) {
@@ -4410,12 +4362,28 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
     // 4. Earnings
     const earnings = completedBookings.reduce((sum, b) => sum + (Number(b.price) || 0), 0);
 
-    // 5. Recent Activity: Top 5 items from worker's assigned bookings only
+    // 5. Recent Activity: Top 5 items combining worker's recent bookings + top available matching leads
     const workerBookings = await db.collection('bookings').find({
-      $or: workerOrQueries
+      $or: [
+        { workerId: uid },
+        { workerId: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
+      ]
     }).sort({ updatedAt: -1, createdAt: -1 }).toArray();
 
-    const top5 = workerBookings.slice(0, 5);
+    const combinedActivityList = [...workerBookings];
+    matchingPendingLeads.forEach(b => {
+      if (!combinedActivityList.some(item => item._id.toString() === b._id.toString())) {
+        combinedActivityList.push(b);
+      }
+    });
+
+    combinedActivityList.sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    const top5 = combinedActivityList.slice(0, 5);
 
     const recentActivity = top5.map(b => {
       const status = (b.status || '').toLowerCase();
@@ -4485,48 +4453,66 @@ const handleOnlineStatus = async (req, res) => {
       return res.status(400).json({ error: "isOnline field is required" });
     }
 
-    const onlineVal = !!isOnline;
+    const onlineVal = isOnline === true || isOnline === 'true' || isOnline === 1;
 
-    // Find linked user to extract name, email, phone
-    const targetUser = await db.collection('users').findOne({
-      $or: [
-        { uid: uid },
-        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
-      ]
-    });
+    // Flexible search conditions to locate worker document
+    const queryConditions = [
+      { uid: uid },
+      { id: uid },
+      { name: uid },
+      { email: uid },
+      { phone: uid }
+    ];
+    if (ObjectId.isValid(uid)) {
+      queryConditions.push({ _id: new ObjectId(uid) });
+    }
+
+    let targetUser = await db.collection('users').findOne({ $or: queryConditions });
+    if (!targetUser) {
+      targetUser = await db.collection('workers').findOne({ $or: queryConditions });
+    }
 
     const userEmail = targetUser?.email || '';
     const userName = targetUser?.name || '';
     const userPhone = targetUser?.phone || '';
+    const userUid = targetUser?.uid || '';
+    const userObjId = targetUser?._id;
+
+    const updateFilter = {
+      $or: [
+        { uid: uid },
+        { id: uid },
+        { name: uid },
+        ...(ObjectId.isValid(uid) ? [{ _id: new ObjectId(uid) }] : []),
+        ...(userObjId ? [{ _id: userObjId }] : []),
+        ...(userUid ? [{ uid: userUid }] : []),
+        ...(userEmail ? [{ email: userEmail }] : []),
+        ...(userName ? [{ name: userName }] : []),
+        ...(userPhone ? [{ phone: userPhone }] : [])
+      ]
+    };
 
     // Update in users collection
     await db.collection('users').updateMany(
-      { 
-        $or: [
-          { uid: uid },
-          { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-          { email: userEmail },
-          { phone: userPhone }
-        ] 
-      },
+      updateFilter,
       { $set: { isOnline: onlineVal, updatedAt: new Date() } }
     );
 
     // Update in workers collection
     await db.collection('workers').updateMany(
-      { 
-        $or: [
-          { uid: uid },
-          { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null },
-          { email: userEmail },
-          { phone: userPhone }
-        ] 
-      },
+      updateFilter,
       { $set: { isOnline: onlineVal, updatedAt: new Date() } }
     );
 
-    // Emit real-time socket event for online status update
-    io.emit('worker_status_change', { uid, isOnline: onlineVal });
+    // Emit real-time socket event for online status update to all connected clients
+    io.emit('worker_status_change', { 
+      uid, 
+      id: userObjId ? userObjId.toString() : uid, 
+      name: userName || uid,
+      isOnline: onlineVal 
+    });
+
+    console.log(`🟢 Worker status updated: ${userName || uid} -> ${onlineVal ? 'ONLINE' : 'OFFLINE'}`);
 
     res.json({ success: true, isOnline: onlineVal, message: `Worker online status updated to ${onlineVal}` });
   } catch (err) {
@@ -4607,25 +4593,6 @@ app.post('/api/worker/:uid/subscription/upgrade', async (req, res) => {
       { $set: { subscription: { plan: planId || 'pro', status: 'active' } } }
     );
 
-    // Realtime notification: Notify all accepted booking rooms that chat is now unlocked
-    try {
-      const workerBookings = await db.collection('bookings').find({ workerId: uid }).toArray();
-      for (const b of workerBookings) {
-        const bStatus = (b.status || '').toLowerCase();
-        if (bStatus === 'accepted' || bStatus === 'completed' || bStatus === 'in_progress' || bStatus === 'on_the_way') {
-          const bId = b._id.toString();
-          io.to(bId).emit('chat_unlocked', {
-            bookingId: bId,
-            workerId: uid,
-            customerId: b.customerId,
-            chatEnabled: true
-          });
-        }
-      }
-    } catch (e) {
-      console.log('Error broadcasting chat_unlocked event:', e);
-    }
-
     res.json({
       success: true,
       subscription: {
@@ -4645,13 +4612,6 @@ app.post('/api/worker/:uid/subscription/upgrade', async (req, res) => {
 app.get('/api/worker/:uid/chats', async (req, res) => {
   try {
     const { uid } = req.params;
-
-    // Check worker's subscription status
-    const workerUser = await db.collection('users').findOne({
-      $or: [{ uid: uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }]
-    });
-    const sub = workerUser?.subscription || { plan: 'none', status: 'inactive' };
-    const workerHasSubscription = sub.isActive === true || sub.status === 'active';
 
     // Find all bookings where this worker is assigned
     const bookings = await db.collection('bookings').find({
@@ -4689,9 +4649,7 @@ app.get('/api/worker/:uid/chats', async (req, res) => {
         customerPhoto: customer ? customer.profilePhoto : 'assets/images/worker_ramesh.png',
         lastMessage: lastMsg ? lastMsg.text : 'No messages yet',
         timestamp: lastMsg ? lastMsg.timestamp : booking.schedule || '',
-        updatedAt: lastMsg ? lastMsg.createdAt : new Date(booking.createdAt).getTime(),
-        bookingStatus: booking.status || 'Accepted',
-        workerHasSubscription: workerHasSubscription
+        updatedAt: lastMsg ? lastMsg.createdAt : new Date(booking.createdAt).getTime()
       });
     }
 
@@ -4731,7 +4689,6 @@ app.get('/api/customer/:uid/chats', async (req, res) => {
 
       // Find worker info
       let worker = null;
-      let workerHasSubscription = false;
       if (booking.workerId) {
         worker = await db.collection('users').findOne({
           $or: [
@@ -4739,10 +4696,6 @@ app.get('/api/customer/:uid/chats', async (req, res) => {
             { _id: ObjectId.isValid(booking.workerId) ? new ObjectId(booking.workerId) : null }
           ]
         });
-        if (worker) {
-          const wSub = worker.subscription || { plan: 'none', status: 'inactive' };
-          workerHasSubscription = wSub.isActive === true || wSub.status === 'active';
-        }
       }
 
       populatedChats.push({
@@ -4754,9 +4707,7 @@ app.get('/api/customer/:uid/chats', async (req, res) => {
         workerPhoto: worker ? worker.profilePhoto : 'assets/images/worker_ramesh.png',
         lastMessage: lastMsg ? lastMsg.text : 'No messages yet',
         timestamp: lastMsg ? lastMsg.timestamp : booking.schedule || '',
-        updatedAt: lastMsg ? lastMsg.createdAt : new Date(booking.createdAt).getTime(),
-        bookingStatus: booking.status || 'Accepted',
-        workerHasSubscription: workerHasSubscription
+        updatedAt: lastMsg ? lastMsg.createdAt : new Date(booking.createdAt).getTime()
       });
     }
 

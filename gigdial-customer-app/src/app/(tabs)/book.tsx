@@ -319,8 +319,9 @@ export default function BookScreen() {
     setConfirming(true);
 
     const bookingPayload = {
-      customerId: user.id,
+      customerId: user.id || (user as any)._id,
       customerName: user.name,
+      customerEmail: user.email,
       workerId: selectedWorker.id,
       workerName: selectedWorker.name,
       title: workTitle,
