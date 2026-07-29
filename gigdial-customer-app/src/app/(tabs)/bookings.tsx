@@ -75,10 +75,16 @@ export default function BookingsScreen() {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${LOCAL_API_URL}/customer/bookings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (user?.email) {
+        headers['X-User-Email'] = user.email;
+      }
+      const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+      const res = await fetch(`${LOCAL_API_URL}/customer/bookings${emailParam}`, {
+        headers
       });
       if (res.ok) {
         const data = await res.json();

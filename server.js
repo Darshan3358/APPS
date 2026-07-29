@@ -3420,35 +3420,45 @@ app.get('/api/worker/bookings', auth, async (req, res) => {
 });
 
 // GET /api/customer/bookings
-app.get('/api/customer/bookings', auth, async (req, res) => {
+app.get('/api/customer/bookings', async (req, res) => {
   try {
-    const userIdStr = String(req.user._id || req.user.id || req.user.uid || '');
-    const userEmail = (req.user.email || '').trim();
-    const userName = (req.user.name || '').trim();
+    let user = null;
+    const authHeader = req.header('Authorization')?.replace('Bearer ', '');
+    if (authHeader) {
+      try {
+        const decoded = jwt.verify(authHeader, JWT_SECRET);
+        if (decoded && decoded.userId && ObjectId.isValid(decoded.userId)) {
+          user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+        }
+      } catch (e) {}
+    }
+
+    const emailQuery = (req.query.email || req.header('X-User-Email') || user?.email || '').trim();
+    const nameQuery = (req.query.name || user?.name || '').trim();
+    const userIdStr = String(user?._id || user?.id || user?.uid || req.query.customerId || '');
 
     const escapeRegex = (str) => str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
-    const orConditions = [
-      { customerId: userIdStr },
-      { customerId: req.user.id },
-      { customerId: String(req.user._id) },
-      ...(req.user.uid ? [{ customerId: req.user.uid }] : []),
-      ...(userEmail ? [
-        { customerEmail: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } },
-        { email: { $regex: new RegExp(`^${escapeRegex(userEmail)}$`, 'i') } }
-      ] : []),
-      ...(userName ? [
-        { customerName: { $regex: new RegExp(`^${escapeRegex(userName)}$`, 'i') } }
-      ] : [])
-    ];
+    const orConditions = [];
 
-    if (ObjectId.isValid(userIdStr)) {
-      orConditions.push({ customerId: new ObjectId(userIdStr) });
+    if (userIdStr && userIdStr !== 'undefined' && userIdStr !== 'null') {
+      orConditions.push({ customerId: userIdStr });
+      if (ObjectId.isValid(userIdStr)) {
+        orConditions.push({ customerId: new ObjectId(userIdStr) });
+      }
     }
 
-    const bookings = await db.collection('bookings').find({
-      $or: orConditions
-    }).sort({ createdAt: -1 }).toArray();
+    if (emailQuery) {
+      orConditions.push({ customerEmail: { $regex: new RegExp(`^${escapeRegex(emailQuery)}$`, 'i') } });
+      orConditions.push({ email: { $regex: new RegExp(`^${escapeRegex(emailQuery)}$`, 'i') } });
+    }
+
+    if (nameQuery) {
+      orConditions.push({ customerName: { $regex: new RegExp(`^${escapeRegex(nameQuery)}$`, 'i') } });
+    }
+
+    const query = orConditions.length > 0 ? { $or: orConditions } : {};
+    const bookings = await db.collection('bookings').find(query).sort({ createdAt: -1 }).toArray();
 
     res.json(bookings);
   } catch (err) {
