@@ -1511,21 +1511,23 @@ app.get('/api/customer/workers', async (req, res) => {
       if (u.email) seenIds.add(u.email);
 
       const onlineFlag = u.isOnline !== false && u.isOnline !== 'false';
+      const prof = u.mainCategory || u.category || u.profession || 'Service Provider';
+      const userSkills = [...(Array.isArray(u.skills) ? u.skills : []), ...(Array.isArray(u.additionalSkills) ? u.additionalSkills : [])];
 
       merged.push({
         id: u._id.toString(),
         name: u.name || 'Service Provider',
-        profilePhoto: u.profilePhoto || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100',
-        profession: u.category || u.profession || 'Service Provider',
-        role: u.category || u.profession || 'Service Provider',
+        profilePhoto: u.profilePhoto || u.avatar || u.profileImage || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100',
+        profession: prof,
+        role: prof,
         rating: u.rating || 4.9,
         reviewsCount: u.reviewsCount || 12,
         reviews: u.reviewsCount || 12,
         experience: u.experience ? `${u.experience} Years Experience` : '6 Years Experience',
         location: u.city || 'Ahmedabad, India',
         availability: onlineFlag ? 'Available Now' : 'Offline',
-        about: u.about || 'Professional GigDial service provider.',
-        skills: u.skills || ['General Service'],
+        about: u.about || u.serviceDescription || 'Professional GigDial service provider.',
+        skills: userSkills.length > 0 ? userSkills : ['General Service'],
         phone: u.phone || '',
         whatsapp: u.phone || '',
         starDistribution: u.starDistribution || { five: 90, four: 8, three: 2, two: 0, one: 0 },
@@ -1550,21 +1552,23 @@ app.get('/api/customer/workers', async (req, res) => {
         if (userBlocked) continue;
 
         const onlineFlag = w.isOnline !== false && w.isOnline !== 'false';
+        const prof = w.mainCategory || w.category || w.profession || 'Service Provider';
+        const workerSkills = [...(Array.isArray(w.skills) ? w.skills : []), ...(Array.isArray(w.additionalSkills) ? w.additionalSkills : [])];
 
         merged.push({
           id: w._id.toString(),
           name: w.name || 'Service Provider',
-          profilePhoto: w.image || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100',
-          profession: w.profession || 'Service Provider',
-          role: w.profession || 'Service Provider',
+          profilePhoto: w.profilePhoto || w.profileImage || w.image || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100',
+          profession: prof,
+          role: prof,
           rating: w.rating || 4.8,
           reviewsCount: w.reviewsCount || 8,
           reviews: w.reviewsCount || 8,
-          experience: w.experience || '4 Years Experience',
+          experience: w.experience ? `${w.experience} Years Experience` : '4 Years Experience',
           location: w.city || 'Ahmedabad, India',
           availability: onlineFlag ? 'Available Now' : 'Offline',
-          about: w.about || 'Professional GigDial service provider.',
-          skills: w.skills || ['General Service'],
+          about: w.about || w.serviceDescription || 'Professional GigDial service provider.',
+          skills: workerSkills.length > 0 ? workerSkills : ['General Service'],
           phone: w.phone || '',
           whatsapp: w.phone || '',
           starDistribution: w.starDistribution || { five: 100, four: 0, three: 0, two: 0, one: 0 },

@@ -251,19 +251,32 @@ export default function BookScreen() {
 
   const isServiceMatch = (workerProf: string = '', cat: string = '', skills: string[] = []) => {
     if (!cat) return true;
-    const wProf = workerProf.toLowerCase();
-    const target = cat.toLowerCase();
-    const allSkills = (skills || []).map(s => s.toLowerCase()).join(' ');
+    const wProf = (workerProf || '').toLowerCase();
+    const target = (cat || '').toLowerCase();
+    const allSkills = (skills || []).map(s => String(s).toLowerCase()).join(' ');
+    const combined = `${wProf} ${allSkills}`;
 
     if (wProf.includes(target) || target.includes(wProf)) return true;
-    if (allSkills.includes(target)) return true;
+    if (allSkills.includes(target) || target.includes(allSkills)) return true;
 
-    if ((target.includes('plumb') || target.includes('water')) && (wProf.includes('plumb') || allSkills.includes('plumb'))) return true;
-    if ((target.includes('electr') || target.includes('light')) && (wProf.includes('electr') || allSkills.includes('electr'))) return true;
-    if ((target.includes('paint') || target.includes('deco')) && (wProf.includes('paint') || allSkills.includes('paint'))) return true;
-    if ((target.includes('carpent') || target.includes('wood') || target.includes('furniture') || target.includes('marramat')) && (wProf.includes('carpent') || allSkills.includes('carpent'))) return true;
-    if ((target.includes('clean') || target.includes('pest') || target.includes('housekeeping')) && (wProf.includes('clean') || allSkills.includes('clean'))) return true;
-    if ((target.includes('ac') || target.includes('appliance')) && (wProf.includes('ac') || wProf.includes('electr') || allSkills.includes('ac'))) return true;
+    if (target.includes('plumb') || target.includes('water')) {
+      return combined.includes('plumb') || combined.includes('water') || combined.includes('tap') || combined.includes('leak') || combined.includes('drain');
+    }
+    if (target.includes('electr') || target.includes('light')) {
+      return combined.includes('electr') || combined.includes('light') || combined.includes('wire') || combined.includes('switch');
+    }
+    if (target.includes('paint') || target.includes('deco')) {
+      return combined.includes('paint') || combined.includes('deco') || combined.includes('wall') || combined.includes('putty');
+    }
+    if (target.includes('carpent') || target.includes('wood') || target.includes('furniture') || target.includes('marramat')) {
+      return combined.includes('carpent') || combined.includes('wood') || combined.includes('furniture') || combined.includes('marramat') || combined.includes('door');
+    }
+    if (target.includes('clean') || target.includes('pest') || target.includes('housekeeping')) {
+      return combined.includes('clean') || combined.includes('pest') || combined.includes('wash') || combined.includes('housekeeping');
+    }
+    if (target.includes('ac') || target.includes('appliance')) {
+      return combined.includes('ac') || combined.includes('appliance') || combined.includes('cool') || combined.includes('electr');
+    }
 
     return false;
   };
