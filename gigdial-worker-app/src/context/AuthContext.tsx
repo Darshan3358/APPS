@@ -329,7 +329,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'Accept': 'application/json',
           }
         });
-        resData = await res.json();
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          resData = await res.json();
+        } else {
+          const text = await res.text();
+          console.error('❌ Non-JSON response:', text);
+          return { success: false, error: `Server returned ${res.status}: ${text.replace(/<[^>]*>?/gm, '').substring(0, 150)}` };
+        }
         if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
       } else {
         resData = await new Promise((resolve, reject) => {
@@ -337,15 +344,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           xhr.open('POST', `${LOCAL_API_URL}/auth/register/step3`);
           xhr.setRequestHeader('Accept', 'application/json');
           xhr.onload = () => {
+            const contentType = xhr.getResponseHeader('content-type') || '';
             try {
-              const parsed = JSON.parse(xhr.responseText);
-              if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(parsed);
+              if (contentType.includes('application/json')) {
+                const parsed = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  resolve(parsed);
+                } else {
+                  reject(new Error(parsed.error || `KYC Submission failed (${xhr.status})`));
+                }
               } else {
-                reject(new Error(parsed.error || `Step 3 failed (${xhr.status})`));
+                console.error("❌ Non-JSON response received:", xhr.responseText);
+                const textPreview = xhr.responseText ? xhr.responseText.replace(/<[^>]*>?/gm, '').trim().substring(0, 150) : '';
+                reject(new Error(`Server returned ${xhr.status}: ${textPreview || 'Internal Server Error'}`));
               }
             } catch (e) {
-              reject(new Error(xhr.responseText || 'Step 3 failed'));
+              reject(new Error(`Server response error (${xhr.status})`));
             }
           };
           xhr.onerror = () => {

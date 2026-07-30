@@ -503,7 +503,7 @@ const sendEmail = ({ to, subject, text, html }) => {
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 } // 10MB limit
 });
 
 // Serve uploads statically (fallback/legacy)
@@ -2618,7 +2618,12 @@ app.post('/api/auth/register/step2', async (req, res) => {
 const safeUploadAny = (req, res, next) => {
   upload.any()(req, res, (err) => {
     if (err) {
-      console.error("[Multer Upload Warning]:", err.message || err);
+      console.error("❌ MULTER ERROR:", err);
+      return res.status(400).json({
+        success: false,
+        error: err.message || "File upload failed",
+        code: err.code || null
+      });
     }
     next();
   });
@@ -2657,15 +2662,22 @@ app.post('/api/auth/register/step3', safeUploadAny, async (req, res) => {
     let experienceCertificateUrl = "";
 
     if (req.files && Array.isArray(req.files)) {
-      const aadhaarFile = req.files.find(f => f.fieldname === 'aadhaarCard' || f.fieldname === 'aadhaar');
+      const aadhaarFrontFile = req.files.find(f => f.fieldname === 'aadhaarFront' || f.fieldname === 'aadhaarCard' || f.fieldname === 'aadhaar');
+      const aadhaarBackFile = req.files.find(f => f.fieldname === 'aadhaarBack');
       const panFile = req.files.find(f => f.fieldname === 'panCard' || f.fieldname === 'pan');
       const expFile = req.files.find(f => f.fieldname === 'experienceCertificate' || f.fieldname === 'certificate');
 
-      if (aadhaarFile && aadhaarFile.buffer) {
+      if (aadhaarFrontFile && aadhaarFrontFile.buffer) {
         try {
-          const result = await uploadFromBuffer(aadhaarFile.buffer, 'kyc/aadhaar', aadhaarFile.originalname);
+          const result = await uploadFromBuffer(aadhaarFrontFile.buffer, 'kyc/aadhaar', aadhaarFrontFile.originalname);
           aadhaarCardUrl = result.secure_url;
-        } catch (e) { console.error("Aadhaar upload error:", e); }
+        } catch (e) { console.error("Aadhaar Front upload error:", e); }
+      }
+      if (aadhaarBackFile && aadhaarBackFile.buffer) {
+        try {
+          const result = await uploadFromBuffer(aadhaarBackFile.buffer, 'kyc/aadhaar', aadhaarBackFile.originalname);
+          if (!aadhaarCardUrl) aadhaarCardUrl = result.secure_url;
+        } catch (e) { console.error("Aadhaar Back upload error:", e); }
       }
       if (panFile && panFile.buffer) {
         try {
