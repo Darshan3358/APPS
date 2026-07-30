@@ -551,8 +551,13 @@ export default function AppContainer() {
       async () => {
         try {
           const res = await fetch(`${API_BASE_URL}/blogs/${id}`, { method: 'DELETE' });
-          if (res.ok) fetchData(true);
-          else Alert.alert('Error', 'Failed to delete blog post.');
+          if (res.ok) {
+            setBlogs((prev) => prev.filter((b) => String(b._id) !== String(id) && String(b.id) !== String(id)));
+            fetchData(true);
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            Alert.alert('Error', errData.error || 'Failed to delete blog post.');
+          }
         } catch {
           Alert.alert('Error', 'Server connection error.');
         }

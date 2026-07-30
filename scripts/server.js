@@ -5717,10 +5717,15 @@ app.put('/api/blogs/:id', async (req, res) => {
 app.delete('/api/blogs/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid blog ID" });
+    let query = {};
+    if (ObjectId.isValid(id)) {
+      query = { $or: [{ _id: new ObjectId(id) }, { _id: id }, { id: id }] };
+    } else {
+      query = { $or: [{ _id: id }, { id: id }] };
+    }
 
-    await db.collection('blogs').deleteOne({ _id: new ObjectId(id) });
-    res.json({ success: true, message: "Blog deleted successfully" });
+    const result = await db.collection('blogs').deleteOne(query);
+    res.json({ success: true, message: "Blog deleted successfully", deletedCount: result.deletedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
