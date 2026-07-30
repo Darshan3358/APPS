@@ -61,6 +61,9 @@ const safeFetch = async (endpoint: string, options: RequestInit = {}) => {
 
 const formatErrorMessage = (errMessage?: string): string => {
   if (!errMessage) return 'An unexpected error occurred. Please try again.';
+  if (errMessage.includes('<!DOCTYPE') || errMessage.includes('<html') || errMessage.includes('Internal Server Error')) {
+    return 'Server error processing request. Please ensure all details and documents are uploaded and try again.';
+  }
   const lower = errMessage.toLowerCase();
   if (lower.includes('failed to fetch') || lower.includes('network request failed') || lower.includes('networkerror') || lower.includes('typeerror')) {
     return 'Unable to connect to server. Please check your internet connection and try again.';

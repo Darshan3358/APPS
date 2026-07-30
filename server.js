@@ -142,6 +142,33 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+const saveFileLocally = (fileBuffer, folderName, originalName = 'upload.jpg') => {
+  return new Promise((resolve, reject) => {
+    try {
+      const targetSubDir = path.join(uploadsDir, folderName);
+      if (!fs.existsSync(targetSubDir)) {
+        fs.mkdirSync(targetSubDir, { recursive: true });
+      }
+      const ext = path.extname(originalName) || '.jpg';
+      const filename = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const filePath = path.join(targetSubDir, filename);
+      fs.writeFileSync(filePath, fileBuffer);
+
+      const relativePath = `/uploads/${folderName}/${filename}`.replace(/\\/g, '/');
+      const host = process.env.SERVER_URL || `http://localhost:${PORT}`;
+      const fullUrl = `${host}${relativePath}`;
+
+      resolve({
+        public_id: filename,
+        secure_url: fullUrl,
+        url: fullUrl
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
 // Helper function to upload buffer data to Cloudinary via streams, with local disk fallback
 const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') => {
   return new Promise((resolve, reject) => {
@@ -154,34 +181,14 @@ const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') =
           if (result) {
             resolve(result);
           } else {
-            reject(error);
+            console.error(`[Cloudinary Upload Error] ${folderName}:`, error);
+            saveFileLocally(fileBuffer, folderName, originalName).then(resolve).catch(reject);
           }
         }
       );
       streamifier.createReadStream(fileBuffer).pipe(cld_upload_stream);
     } else {
-      try {
-        const targetSubDir = path.join(uploadsDir, folderName);
-        if (!fs.existsSync(targetSubDir)) {
-          fs.mkdirSync(targetSubDir, { recursive: true });
-        }
-        const ext = path.extname(originalName) || '.jpg';
-        const filename = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
-        const filePath = path.join(targetSubDir, filename);
-        fs.writeFileSync(filePath, fileBuffer);
-
-        const relativePath = `/uploads/${folderName}/${filename}`.replace(/\\/g, '/');
-        const host = process.env.SERVER_URL || `http://localhost:${PORT}`;
-        const fullUrl = `${host}${relativePath}`;
-
-        resolve({
-          public_id: filename,
-          secure_url: fullUrl,
-          url: fullUrl
-        });
-      } catch (err) {
-        reject(err);
-      }
+      saveFileLocally(fileBuffer, folderName, originalName).then(resolve).catch(reject);
     }
   });
 };
@@ -3281,8 +3288,9 @@ app.get('/api/bookings/pending', auth, async (req, res) => {
 });
 
 function categoryMatchesLead(categoryStr, title, desc) {
-  if (!categoryStr) return true;
+  if (!categoryStr) return false;
   const workerCats = categoryStr.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
+  if (workerCats.length === 0) return false;
   const t = (title || '').toLowerCase();
   const d = (desc || '').toLowerCase();
   const keywordMap = {
@@ -4348,11 +4356,23 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
       const bWorkerIdStr = b.workerId ? String(b.workerId) : '';
       const uidStr = String(uid);
       const isDirectMatch = bWorkerIdStr === uidStr || bWorkerIdStr === workerIdStr ||
-        (ObjectId.isValid(bWorkerIdStr) && ObjectId.isValid(uidStr) && bWorkerIdStr === uidStr);
-      return isDirectMatch || categoryMatchesLead(workerCategory, b.title, b.description);
+        (workerUidStr && bWorkerIdStr === workerUidStr) ||
+        (workerName && (b.workerName === workerName || b.name === workerName)) ||
+        (workerEmail && b.workerEmail === workerEmail) ||
+        (workerPhone && b.workerPhone === workerPhone);
+      const isUnassignedOpenLead = !b.workerId || b.workerId === '' || b.workerId === 'unassigned';
+      return isDirectMatch || (isUnassignedOpenLead && categoryMatchesLead(workerCategory, b.title || b.serviceName, b.description));
     });
 
-    const todayLeadsCount = matchingPendingLeads.length;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayMatchingLeads = matchingPendingLeads.filter(b => {
+      const bDate = b.createdAt ? new Date(b.createdAt) : (b.date ? new Date(b.date) : null);
+      return bDate && bDate >= todayStart;
+    });
+
+    const todayLeadsCount = todayMatchingLeads.length;
 
     // 2. Calculate Completed Jobs for this worker
     const workerIdentifiers = [
@@ -5767,6 +5787,19 @@ app.put('/api/blogs/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/blogs/:id - Delete blog post
+app.delete('/api/blogs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid blog ID" });
+
+    await db.collection('blogs').deleteOne({ _id: new ObjectId(id) });
+    res.json({ success: true, message: "Blog deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/feedbacks - Get all user feedbacks
 app.get('/api/feedbacks', async (req, res) => {
   try {
@@ -5787,6 +5820,18 @@ app.delete('/api/feedbacks/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Express Global Error Handler - Always return JSON, never HTML
+app.use((err, req, res, next) => {
+  console.error("Global Express Error:", err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: err.message || "An unexpected internal server error occurred."
+  });
 });
 
 module.exports = app;

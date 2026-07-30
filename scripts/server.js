@@ -3269,8 +3269,9 @@ app.get('/api/bookings/pending', auth, async (req, res) => {
 });
 
 function categoryMatchesLead(categoryStr, title, desc) {
-  if (!categoryStr) return true;
+  if (!categoryStr) return false;
   const workerCats = categoryStr.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
+  if (workerCats.length === 0) return false;
   const t = (title || '').toLowerCase();
   const d = (desc || '').toLowerCase();
   const keywordMap = {
@@ -4307,10 +4308,19 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
       const uidStr = String(uid);
       const isDirectMatch = bWorkerIdStr === uidStr || 
         (ObjectId.isValid(bWorkerIdStr) && ObjectId.isValid(uidStr) && bWorkerIdStr === uidStr);
-      return isDirectMatch || categoryMatchesLead(workerCategory, b.title, b.description);
+      const isUnassignedOpenLead = !b.workerId || b.workerId === '' || b.workerId === 'unassigned';
+      return isDirectMatch || (isUnassignedOpenLead && categoryMatchesLead(workerCategory, b.title || b.serviceName, b.description));
     });
 
-    const todayLeadsCount = matchingPendingLeads.length;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayMatchingLeads = matchingPendingLeads.filter(b => {
+      const bDate = b.createdAt ? new Date(b.createdAt) : (b.date ? new Date(b.date) : null);
+      return bDate && bDate >= todayStart;
+    });
+
+    const todayLeadsCount = todayMatchingLeads.length;
 
     // 2. Calculate Completed Jobs for this worker
     const completedBookings = await db.collection('bookings').find({
@@ -5698,6 +5708,19 @@ app.put('/api/blogs/:id', async (req, res) => {
       { $set: updateData }
     );
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/blogs/:id - Delete blog post
+app.delete('/api/blogs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid blog ID" });
+
+    await db.collection('blogs').deleteOne({ _id: new ObjectId(id) });
+    res.json({ success: true, message: "Blog deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
