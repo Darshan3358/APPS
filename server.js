@@ -2629,7 +2629,14 @@ const safeUploadAny = (req, res, next) => {
   });
 };
 
-app.post('/api/auth/register/step3', safeUploadAny, async (req, res) => {
+app.post('/api/auth/register/step3', (req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    safeUploadAny(req, res, next);
+  } else {
+    next();
+  }
+}, async (req, res) => {
   try {
     const body = req.body || {};
     const {
