@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, Modal, TextInput, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import ProgressBar from '../components/ProgressBar';
 import { API_URL as LOCAL_API_URL } from '../config/api';
@@ -79,6 +80,10 @@ export default function RegisterStep2() {
   const [experience, setExperience] = useState(tempRegData.experience ? String(tempRegData.experience) : '');
   const [description, setDescription] = useState(tempRegData.serviceDescription || '');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(tempRegData.languages || []);
+
+  // Experience Certificate upload (optional)
+  const [experienceCertUri, setExperienceCertUri] = useState<string>('');
+  const [experienceCertFile, setExperienceCertFile] = useState<any>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -169,6 +174,47 @@ export default function RegisterStep2() {
     setShowDatePicker(false);
   };
 
+  const handlePickExperienceCert = async () => {
+    if ((Platform.OS as string) === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          setExperienceCertFile(file);
+          setExperienceCertUri(URL.createObjectURL(file));
+        }
+      };
+      input.click();
+    } else {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Permission to access media library is required.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets && result.assets[0]) {
+          const asset = result.assets[0];
+          const fileUri = Platform.OS === 'android' && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')
+            ? `file://${asset.uri}`
+            : asset.uri;
+          const fileName = asset.fileName || asset.uri.split('/').pop() || 'experience_cert.jpg';
+          const match = /\.(\w+)$/.exec(fileName);
+          const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
+          setExperienceCertUri(fileUri);
+          setExperienceCertFile({ uri: fileUri, name: fileName, type: fileType });
+        }
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to select image.');
+      }
+    }
+  };
+
   const handleNext = async () => {
     setSubmitError('');
     if (selectedCategories.length === 0) {
@@ -190,7 +236,9 @@ export default function RegisterStep2() {
       dob: dob,
       experience: Number(experience),
       serviceDescription: description,
-      languages: selectedLanguages
+      languages: selectedLanguages,
+      experienceCertUri: experienceCertUri || undefined,
+      experienceCertFile: experienceCertFile || undefined,
     });
     setSubmitting(false);
 
@@ -286,6 +334,30 @@ export default function RegisterStep2() {
             value={experience}
             onChangeText={setExperience}
           />
+
+          {/* Experience Certificate Upload - Optional */}
+          <Text style={styles.label}>
+            Experience Certificate{' '}
+            <Text style={styles.optionalTag}>(Optional)</Text>
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.uploadBtn,
+              experienceCertUri ? styles.uploadBtnSelected : null,
+            ]}
+            onPress={handlePickExperienceCert}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={experienceCertUri ? 'checkmark-circle' : 'document-attach-outline'}
+              size={20}
+              color={experienceCertUri ? '#0D9488' : '#6B7280'}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={[styles.uploadBtnText, experienceCertUri ? styles.uploadBtnTextSelected : null]}>
+              {experienceCertUri ? 'Certificate Selected ✓' : 'Upload Experience Certificate'}
+            </Text>
+          </TouchableOpacity>
 
           <Input
             label="Service Details (Description)"
@@ -661,6 +733,37 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     fontWeight: '600',
+  },
+  optionalTag: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E5E8EC',
+    borderRadius: 14,
+    borderStyle: 'dashed',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    marginBottom: 16,
+  },
+  uploadBtnSelected: {
+    borderColor: '#0D9488',
+    backgroundColor: '#F0FDFA',
+    borderStyle: 'solid',
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  uploadBtnTextSelected: {
+    color: '#0D9488',
+    fontWeight: '700',
   },
   dropdownTrigger: {
     flexDirection: 'row',

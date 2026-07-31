@@ -23,8 +23,8 @@ export default function RegisterStep3() {
   
   const [aadhaarFile, setAadhaarFile] = useState<any>(null);
   const [panFile, setPanFile] = useState<any>(null);
-  const [experienceCertUri, setExperienceCertUri] = useState<string>('');
-  const [experienceCertFile, setExperienceCertFile] = useState<any>(null);
+  const [experienceCertUri, setExperienceCertUri] = useState<string>(tempRegData.experienceCertUri || '');
+  const [experienceCertFile, setExperienceCertFile] = useState<any>(tempRegData.experienceCertFile || null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
