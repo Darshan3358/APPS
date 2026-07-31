@@ -343,6 +343,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', `${LOCAL_API_URL}/auth/register/step3`);
           xhr.setRequestHeader('Accept', 'application/json');
+          xhr.timeout = 120000; // 120 seconds for 3 image uploads on mobile
           xhr.onload = () => {
             const contentType = xhr.getResponseHeader('content-type') || '';
             try {
@@ -363,6 +364,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
           xhr.onerror = () => {
             reject(new Error('Network request failed. Please check backend connection.'));
+          };
+          xhr.ontimeout = () => {
+            reject(new Error('Upload timed out. Please try with smaller images or check your internet connection.'));
           };
           xhr.send(formData);
         });

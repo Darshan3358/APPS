@@ -183,13 +183,13 @@ const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') =
     const publicId = `${folderName}_${uniqueId}`;
 
     const timeout = setTimeout(() => {
-      console.warn(`[uploadFromBuffer Timeout] ${folderName}: 25s exceeded, using fallback.`);
+      console.warn(`[uploadFromBuffer Timeout] ${folderName}: 60s exceeded, using fallback.`);
       resolve({
         public_id: publicId,
         secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
         url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
       });
-    }, 25000);
+    }, 60000);
 
     const safeResolve = (res) => {
       clearTimeout(timeout);
@@ -2735,38 +2735,32 @@ app.post('/api/auth/register/step3', (req, res, next) => {
       const panFile = req.files.find(f => f.fieldname === 'panCard' || f.fieldname === 'pan');
       const expFile = req.files.find(f => f.fieldname === 'experienceCertificate' || f.fieldname === 'certificate' || f.fieldname === 'experienceCert' || f.fieldname === 'cert' || f.fieldname === 'experience_certificate');
 
-      const uploadTasks = [];
-
+      // Sequential uploads — prevents Render from being overwhelmed by simultaneous streams
       if (aadhaarFrontFile && aadhaarFrontFile.buffer) {
-        uploadTasks.push(
-          uploadFromBuffer(aadhaarFrontFile.buffer, 'aadhaar', aadhaarFrontFile.originalname)
-            .then(res => { aadhaarCardUrl = res.secure_url || ""; })
-            .catch(e => console.error("Aadhaar Front upload error:", e))
-        );
+        try {
+          const r = await uploadFromBuffer(aadhaarFrontFile.buffer, 'aadhaar', aadhaarFrontFile.originalname);
+          aadhaarCardUrl = r.secure_url || '';
+        } catch (e) { console.error('Aadhaar Front upload error:', e); }
       }
-      if (aadhaarBackFile && aadhaarBackFile.buffer) {
-        uploadTasks.push(
-          uploadFromBuffer(aadhaarBackFile.buffer, 'aadhaar', aadhaarBackFile.originalname)
-            .then(res => { if (!aadhaarCardUrl) aadhaarCardUrl = res.secure_url || ""; })
-            .catch(e => console.error("Aadhaar Back upload error:", e))
-        );
+      if (aadhaarBackFile && aadhaarBackFile.buffer && !aadhaarCardUrl) {
+        try {
+          const r = await uploadFromBuffer(aadhaarBackFile.buffer, 'aadhaar', aadhaarBackFile.originalname);
+          aadhaarCardUrl = r.secure_url || '';
+        } catch (e) { console.error('Aadhaar Back upload error:', e); }
       }
       if (panFile && panFile.buffer) {
-        uploadTasks.push(
-          uploadFromBuffer(panFile.buffer, 'pan', panFile.originalname)
-            .then(res => { panCardUrl = res.secure_url || ""; })
-            .catch(e => console.error("PAN upload error:", e))
-        );
+        try {
+          const r = await uploadFromBuffer(panFile.buffer, 'pan', panFile.originalname);
+          panCardUrl = r.secure_url || '';
+        } catch (e) { console.error('PAN upload error:', e); }
       }
       if (expFile && expFile.buffer) {
-        uploadTasks.push(
-          uploadFromBuffer(expFile.buffer, 'certificates', expFile.originalname)
-            .then(res => { experienceCertificateUrl = res.secure_url || ""; })
-            .catch(e => console.error("Experience cert upload error:", e))
-        );
+        try {
+          const r = await uploadFromBuffer(expFile.buffer, 'certificates', expFile.originalname);
+          experienceCertificateUrl = r.secure_url || '';
+        } catch (e) { console.error('Experience cert upload error:', e); }
       }
 
-      await Promise.all(uploadTasks);
     } else if (req.files && typeof req.files === 'object') {
       const uploadTasks = [];
       const aadhaarObjFile = req.files['aadhaarCard'] || req.files['aadhaarFront'] || req.files['aadhaar'];
