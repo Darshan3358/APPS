@@ -247,200 +247,86 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const aNum = aadhaarNumber || tempRegData.aadhaarNumber || '';
       const pNum = panNumber || tempRegData.panNumber || '';
 
-      // Check if we have Base64 images — send clean JSON payload (avoids Multer multipart issues 100%)
-      if (aadhaarBase64 || panBase64 || experienceCertBase64) {
-        const payload = {
-          name: tempRegData.name,
-          email: tempRegData.email,
-          password: tempRegData.password,
-          phone: tempRegData.phone,
-          city: tempRegData.city,
-          address: tempRegData.address || '',
-          profilePhoto: tempRegData.profilePhoto || '',
-          mainCategory: tempRegData.mainCategory || '',
-          dob: tempRegData.dob || '',
-          experience: tempRegData.experience || 0,
-          serviceDescription: tempRegData.serviceDescription || '',
-          languages: tempRegData.languages || [],
-          serviceType,
-          additionalSkills: skills,
-          aadhaarNumber: aNum,
-          panNumber: pNum,
-          aadhaarBase64: aadhaarBase64 || '',
-          panBase64: panBase64 || '',
-          experienceCertificateBase64: experienceCertBase64 || ''
-        };
-
-        const res = await fetch(`${LOCAL_API_URL}/auth/register/step3`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const contentType = res.headers.get('content-type') || '';
-        let resData: any = {};
-        if (contentType.includes('application/json')) {
-          resData = await res.json();
-        } else {
-          return { success: false, error: 'Registration server error. Please check backend connection and try again.' };
+      // Helper to convert any local file:// or content:// URI to Base64 string if missing
+      const convertUriToBase64 = async (uri: string): Promise<string> => {
+        if (!uri) return '';
+        if (uri.startsWith('data:image')) {
+          return uri.split(',')[1] || uri;
         }
-
-        if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
-
-        if (resData.otpRequired) {
-          return { success: true, otpRequired: true, email: resData.email };
+        try {
+          const res = await fetch(uri);
+          const blob = await res.blob();
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const dataUrl = reader.result as string;
+              resolve(dataUrl ? dataUrl.split(',')[1] || dataUrl : '');
+            };
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          return '';
         }
+      };
 
-        setTempRegData({});
-        return { success: true };
+      let finalAadhaarB64 = aadhaarBase64 || '';
+      let finalPanB64 = panBase64 || '';
+      let finalExpB64 = experienceCertBase64 || '';
+
+      if (!finalAadhaarB64 && aadhaarUri) {
+        finalAadhaarB64 = await convertUriToBase64(aadhaarUri);
+      }
+      if (!finalPanB64 && panUri) {
+        finalPanB64 = await convertUriToBase64(panUri);
+      }
+      if (!finalExpB64 && experienceCertUri) {
+        finalExpB64 = await convertUriToBase64(experienceCertUri);
       }
 
-      const formData = new FormData();
-      
-      // Update tempRegData with step 3 numbers if passed
-      const aNum = aadhaarNumber || tempRegData.aadhaarNumber || '';
-      const pNum = panNumber || tempRegData.panNumber || '';
+      // Send clean JSON payload (avoids Multer / multipart issues 100%)
+      const payload = {
+        name: tempRegData.name,
+        email: tempRegData.email,
+        password: tempRegData.password,
+        phone: tempRegData.phone,
+        city: tempRegData.city,
+        address: tempRegData.address || '',
+        profilePhoto: tempRegData.profilePhoto || '',
+        mainCategory: tempRegData.mainCategory || '',
+        dob: tempRegData.dob || '',
+        experience: tempRegData.experience || 0,
+        serviceDescription: tempRegData.serviceDescription || '',
+        languages: tempRegData.languages || [],
+        serviceType,
+        additionalSkills: skills,
+        aadhaarNumber: aNum,
+        panNumber: pNum,
+        aadhaarBase64: finalAadhaarB64,
+        panBase64: finalPanB64,
+        experienceCertificateBase64: finalExpB64
+      };
 
-      // Append Step 1 & Step 2 cached fields
-      const cachedFields = [
-        'name', 'email', 'password', 'phone', 'city', 'address', 'profilePhoto',
-        'mainCategory', 'dob', 'experience', 'serviceDescription'
-      ];
-      
-      cachedFields.forEach(field => {
-        if (tempRegData[field] !== undefined && tempRegData[field] !== null) {
-          formData.append(field, String(tempRegData[field]));
-        }
+      const res = await fetch(`${LOCAL_API_URL}/auth/register/step3`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
       });
 
-      formData.append('aadhaarNumber', String(aNum));
-      formData.append('panNumber', String(pNum));
-
-      // Append languages array
-      if (tempRegData.languages) {
-        formData.append('languages', JSON.stringify(tempRegData.languages));
-      }
-
-      // Append Step 3 fields
-      formData.append('serviceType', serviceType);
-      formData.append('additionalSkills', JSON.stringify(skills));
-
-      // Append files
-      if ((Platform.OS as string) === 'web') {
-        if (aadhaarFileWeb) formData.append('aadhaarCard', aadhaarFileWeb);
-        if (panFileWeb) formData.append('panCard', panFileWeb);
-        if (experienceCertFileWeb) formData.append('experienceCertificate', experienceCertFileWeb);
+      const contentType = res.headers.get('content-type') || '';
+      let resData: any = {};
+      if (contentType.includes('application/json')) {
+        resData = await res.json();
       } else {
-        if (aadhaarUri) {
-          let fileUri = aadhaarUri;
-          if (aadhaarFileWeb && aadhaarFileWeb.uri && !aadhaarFileWeb.uri.startsWith('data:')) {
-            fileUri = aadhaarFileWeb.uri;
-          }
-          if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
-            fileUri = `file://${fileUri}`;
-          }
-          const fileName = (aadhaarFileWeb && aadhaarFileWeb.name) || fileUri.split('/').pop() || 'aadhaar.jpg';
-          const match = /\.(\w+)$/.exec(fileName);
-          const fileType = (aadhaarFileWeb && aadhaarFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
-
-          formData.append('aadhaarCard', {
-            uri: fileUri,
-            name: fileName,
-            type: fileType
-          } as any);
-        }
-        if (panUri) {
-          let fileUri = panUri;
-          if (panFileWeb && panFileWeb.uri && !panFileWeb.uri.startsWith('data:')) {
-            fileUri = panFileWeb.uri;
-          }
-          if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
-            fileUri = `file://${fileUri}`;
-          }
-          const fileName = (panFileWeb && panFileWeb.name) || fileUri.split('/').pop() || 'pan.jpg';
-          const match = /\.(\w+)$/.exec(fileName);
-          const fileType = (panFileWeb && panFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
-
-          formData.append('panCard', {
-            uri: fileUri,
-            name: fileName,
-            type: fileType
-          } as any);
-        }
-        if (experienceCertUri) {
-          let fileUri = experienceCertUri;
-          if (experienceCertFileWeb && experienceCertFileWeb.uri && !experienceCertFileWeb.uri.startsWith('data:')) {
-            fileUri = experienceCertFileWeb.uri;
-          }
-          if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
-            fileUri = `file://${fileUri}`;
-          }
-          const fileName = (experienceCertFileWeb && experienceCertFileWeb.name) || fileUri.split('/').pop() || 'experience_cert.jpg';
-          const match = /\.(\w+)$/.exec(fileName);
-          const fileType = (experienceCertFileWeb && experienceCertFileWeb.type) || (match ? `image/${match[1]}` : 'image/jpeg');
-
-          formData.append('experienceCertificate', {
-            uri: fileUri,
-            name: fileName,
-            type: fileType
-          } as any);
-        }
+        const text = await res.text();
+        console.error('❌ Non-JSON response:', text);
+        return { success: false, error: 'Registration server error. Please check backend connection and try again.' };
       }
 
-      let resData: any;
-      if ((Platform.OS as string) === 'web') {
-        const res = await fetch(`${LOCAL_API_URL}/auth/register/step3`, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          resData = await res.json();
-        } else {
-          const text = await res.text();
-          console.error('❌ Non-JSON response:', text);
-          return { success: false, error: 'Registration server error. Please check backend connection and try again.' };
-        }
-        if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
-      } else {
-        resData = await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', `${LOCAL_API_URL}/auth/register/step3`);
-          xhr.setRequestHeader('Accept', 'application/json');
-          xhr.timeout = 120000; // 120 seconds for 3 image uploads on mobile
-          xhr.onload = () => {
-            const contentType = xhr.getResponseHeader('content-type') || '';
-            try {
-              if (contentType.includes('application/json')) {
-                const parsed = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300) {
-                  resolve(parsed);
-                } else {
-                  reject(new Error(parsed.error || `KYC Submission failed (${xhr.status})`));
-                }
-              } else {
-                console.error("❌ Non-JSON response received:", xhr.responseText);
-                reject(new Error('Registration server error. Please check backend connection and try again.'));
-              }
-            } catch (e) {
-              reject(new Error(`Server response error (${xhr.status})`));
-            }
-          };
-          xhr.onerror = () => {
-            reject(new Error('Network request failed. Please check backend connection.'));
-          };
-          xhr.ontimeout = () => {
-            reject(new Error('Upload timed out. Please try with smaller images or check your internet connection.'));
-          };
-          xhr.send(formData);
-        });
-      }
+      if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
 
       if (resData.otpRequired) {
         return { success: true, otpRequired: true, email: resData.email };
