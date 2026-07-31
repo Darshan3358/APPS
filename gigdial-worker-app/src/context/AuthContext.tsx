@@ -29,7 +29,7 @@ interface AuthContextType {
   logout: () => void;
   registerStep1: (data: any) => Promise<{ success: boolean; error?: string }>;
   registerStep2: (data: any) => Promise<{ success: boolean; error?: string }>;
-  registerStep3: (serviceType: string, skills: string[], aadhaarUri: string, panUri: string, aadhaarFileWeb?: any, panFileWeb?: any, experienceCertUri?: string, experienceCertFileWeb?: any, aadhaarNumber?: string, panNumber?: string) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; email?: string }>;
+  registerStep3: (serviceType: string, skills: string[], aadhaarUri: string, panUri: string, aadhaarFileWeb?: any, panFileWeb?: any, experienceCertUri?: string, experienceCertFileWeb?: any, aadhaarNumber?: string, panNumber?: string, aadhaarBase64?: string, panBase64?: string, experienceCertBase64?: string) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; email?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   tempRegData: any;
   setTempRegData: React.Dispatch<React.SetStateAction<any>>;
@@ -234,11 +234,68 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     experienceCertUri?: string,
     experienceCertFileWeb?: any,
     aadhaarNumber?: string,
-    panNumber?: string
+    panNumber?: string,
+    aadhaarBase64?: string,
+    panBase64?: string,
+    experienceCertBase64?: string
   ) => {
     try {
       if (!tempRegData.name || !tempRegData.email || !tempRegData.phone || !tempRegData.city) {
         return { success: false, error: 'Registration details missing. Please complete Step 1 first.' };
+      }
+
+      const aNum = aadhaarNumber || tempRegData.aadhaarNumber || '';
+      const pNum = panNumber || tempRegData.panNumber || '';
+
+      // Check if we have Base64 images — send clean JSON payload (avoids Multer multipart issues 100%)
+      if (aadhaarBase64 || panBase64 || experienceCertBase64) {
+        const payload = {
+          name: tempRegData.name,
+          email: tempRegData.email,
+          password: tempRegData.password,
+          phone: tempRegData.phone,
+          city: tempRegData.city,
+          address: tempRegData.address || '',
+          profilePhoto: tempRegData.profilePhoto || '',
+          mainCategory: tempRegData.mainCategory || '',
+          dob: tempRegData.dob || '',
+          experience: tempRegData.experience || 0,
+          serviceDescription: tempRegData.serviceDescription || '',
+          languages: tempRegData.languages || [],
+          serviceType,
+          additionalSkills: skills,
+          aadhaarNumber: aNum,
+          panNumber: pNum,
+          aadhaarBase64: aadhaarBase64 || '',
+          panBase64: panBase64 || '',
+          experienceCertificateBase64: experienceCertBase64 || ''
+        };
+
+        const res = await fetch(`${LOCAL_API_URL}/auth/register/step3`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        let resData: any = {};
+        if (contentType.includes('application/json')) {
+          resData = await res.json();
+        } else {
+          return { success: false, error: 'Registration server error. Please check backend connection and try again.' };
+        }
+
+        if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
+
+        if (resData.otpRequired) {
+          return { success: true, otpRequired: true, email: resData.email };
+        }
+
+        setTempRegData({});
+        return { success: true };
       }
 
       const formData = new FormData();

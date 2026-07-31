@@ -2755,6 +2755,33 @@ app.post('/api/auth/register/step3', (req, res, next) => {
     let panCardUrl = "";
     let experienceCertificateUrl = "";
 
+    // Process Base64 images directly from JSON payload if provided (bypasses Multer entirely)
+    const uploadBase64 = async (base64Str, folderName, originalName = 'upload.jpg') => {
+      if (!base64Str) return "";
+      try {
+        let clean = String(base64Str).trim();
+        if (clean.includes(',')) {
+          clean = clean.split(',')[1];
+        }
+        const buf = Buffer.from(clean, 'base64');
+        const r = await uploadFromBuffer(buf, folderName, originalName);
+        return r.secure_url || "";
+      } catch (e) {
+        console.error(`[uploadBase64 Error] ${folderName}:`, e);
+        return "";
+      }
+    };
+
+    if (body.aadhaarBase64) {
+      aadhaarCardUrl = await uploadBase64(body.aadhaarBase64, 'aadhaar', 'aadhaar.jpg');
+    }
+    if (body.panBase64) {
+      panCardUrl = await uploadBase64(body.panBase64, 'pan', 'pan.jpg');
+    }
+    if (body.experienceCertificateBase64 || body.experienceBase64) {
+      experienceCertificateUrl = await uploadBase64(body.experienceCertificateBase64 || body.experienceBase64, 'certificates', 'cert.jpg');
+    }
+
     if (req.files && Array.isArray(req.files)) {
       const aadhaarFrontFile = req.files.find(f => f.fieldname === 'aadhaarFront' || f.fieldname === 'aadhaarCard' || f.fieldname === 'aadhaar');
       const aadhaarBackFile = req.files.find(f => f.fieldname === 'aadhaarBack');

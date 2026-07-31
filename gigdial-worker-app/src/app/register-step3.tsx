@@ -25,6 +25,11 @@ export default function RegisterStep3() {
   const [panFile, setPanFile] = useState<any>(null);
   const [experienceCertUri, setExperienceCertUri] = useState<string>(tempRegData.experienceCertUri || '');
   const [experienceCertFile, setExperienceCertFile] = useState<any>(tempRegData.experienceCertFile || null);
+
+  const [aadhaarBase64, setAadhaarBase64] = useState<string>('');
+  const [panBase64, setPanBase64] = useState<string>('');
+  const [experienceCertBase64, setExperienceCertBase64] = useState<string>('');
+
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -53,6 +58,12 @@ export default function RegisterStep3() {
         if (file) {
           setAadhaarFile(file);
           setAadhaarUri(URL.createObjectURL(file));
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = reader.result as string;
+            setAadhaarBase64(res ? res.split(',')[1] || res : '');
+          };
+          reader.readAsDataURL(file);
         }
       };
       input.click();
@@ -66,6 +77,7 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.5,
+          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
@@ -77,6 +89,7 @@ export default function RegisterStep3() {
           const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
 
           setAadhaarUri(fileUri);
+          setAadhaarBase64(asset.base64 || '');
           setAadhaarFile({
             uri: fileUri,
             name: fileName,
@@ -99,6 +112,12 @@ export default function RegisterStep3() {
         if (file) {
           setPanFile(file);
           setPanUri(URL.createObjectURL(file));
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = reader.result as string;
+            setPanBase64(res ? res.split(',')[1] || res : '');
+          };
+          reader.readAsDataURL(file);
         }
       };
       input.click();
@@ -112,6 +131,7 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.5,
+          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
@@ -123,6 +143,7 @@ export default function RegisterStep3() {
           const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
 
           setPanUri(fileUri);
+          setPanBase64(asset.base64 || '');
           setPanFile({
             uri: fileUri,
             name: fileName,
@@ -145,6 +166,12 @@ export default function RegisterStep3() {
         if (file) {
           setExperienceCertFile(file);
           setExperienceCertUri(URL.createObjectURL(file));
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = reader.result as string;
+            setExperienceCertBase64(res ? res.split(',')[1] || res : '');
+          };
+          reader.readAsDataURL(file);
         }
       };
       input.click();
@@ -158,6 +185,7 @@ export default function RegisterStep3() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.5,
+          base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
@@ -169,6 +197,7 @@ export default function RegisterStep3() {
           const fileType = asset.mimeType || (match ? `image/${match[1]}` : 'image/jpeg');
 
           setExperienceCertUri(fileUri);
+          setExperienceCertBase64(asset.base64 || '');
           setExperienceCertFile({
             uri: fileUri,
             name: fileName,
@@ -217,7 +246,10 @@ export default function RegisterStep3() {
         experienceCertUri,
         experienceCertFile,
         aadhaarNumber,
-        panNumber
+        panNumber,
+        aadhaarBase64,
+        panBase64,
+        experienceCertBase64
       );
       setSubmitting(false);
 
