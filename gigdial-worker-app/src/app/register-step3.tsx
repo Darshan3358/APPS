@@ -366,24 +366,6 @@ export default function RegisterStep3() {
             )}
           </TouchableOpacity>
 
-          {/* Experience Certificate (Optional) Upload Box */}
-          <Text style={styles.label}>
-            Experience Certificate <Text style={styles.optionalTag}>(Optional)</Text>
-          </Text>
-          <TouchableOpacity style={styles.uploadBox} onPress={handlePickExperienceCert}>
-            {experienceCertUri ? (
-              <View style={styles.uploadedContent}>
-                <Ionicons name="checkmark-circle-outline" size={24} color="#0D9488" />
-                <Text style={styles.uploadedTitle}>Experience Certificate Selected</Text>
-              </View>
-            ) : (
-              <View style={styles.uploadPlaceholder}>
-                <Ionicons name="document-text-outline" size={24} color="#9CA3AF" />
-                <Text style={styles.uploadPlaceholderTitle}>Upload Experience Certificate (Optional)</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
           <TouchableOpacity 
             style={[styles.submitBtn, submitting && styles.disabledBtn]} 
             onPress={handleSubmit} 
