@@ -2846,6 +2846,8 @@ app.post('/api/auth/register/step3', (req, res, next) => {
       createdAt: new Date()
     };
 
+    // Clear any previous unverified temporary registration for this email
+    await db.collection('temp_registrations').deleteMany({ email: cleanEmail });
     await db.collection('temp_registrations').insertOne(tempRegData);
 
     console.log(`[OTP] Generated worker registration OTP for ${cleanEmail}: ${otp}`);
