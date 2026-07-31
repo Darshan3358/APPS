@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "gigdial-worker-app",
+    "name": "GigDial Worker",
     "slug": "gigdial-worker-app",
     "version": "1.0.0",
     "orientation": "portrait",
