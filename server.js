@@ -1663,9 +1663,9 @@ app.get('/api/customer/workers', async (req, res) => {
     }
 
     // Sort by rating descending and return top 10 for "Top Rated Professionals"
-    // Only show online workers to customers
+    // Only show online workers (isOnline=true or not explicitly set to false)
     const topRated = merged
-      .filter(w => w.isOnline === true)
+      .filter(w => w.isOnline !== false)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 10);
 
@@ -1750,8 +1750,8 @@ app.get('/api/customer/workers/all', async (req, res) => {
       }
     }
 
-    // Only show online workers
-    res.json(merged.filter(w => w.isOnline === true).sort((a, b) => b.rating - a.rating));
+    // Only show online workers (isOnline not explicitly set to false)
+    res.json(merged.filter(w => w.isOnline !== false).sort((a, b) => b.rating - a.rating));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
