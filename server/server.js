@@ -2718,25 +2718,25 @@ app.post('/api/auth/register/step3', (req, res, next) => {
 
       if (aadhaarFrontFile && aadhaarFrontFile.buffer) {
         try {
-          const result = await uploadFromBuffer(aadhaarFrontFile.buffer, 'kyc/aadhaar', aadhaarFrontFile.originalname);
+          const result = await uploadFromBuffer(aadhaarFrontFile.buffer, 'aadhaar', aadhaarFrontFile.originalname);
           aadhaarCardUrl = result.secure_url;
         } catch (e) { console.error("Aadhaar Front upload error:", e); }
       }
       if (aadhaarBackFile && aadhaarBackFile.buffer) {
         try {
-          const result = await uploadFromBuffer(aadhaarBackFile.buffer, 'kyc/aadhaar', aadhaarBackFile.originalname);
+          const result = await uploadFromBuffer(aadhaarBackFile.buffer, 'aadhaar', aadhaarBackFile.originalname);
           if (!aadhaarCardUrl) aadhaarCardUrl = result.secure_url;
         } catch (e) { console.error("Aadhaar Back upload error:", e); }
       }
       if (panFile && panFile.buffer) {
         try {
-          const result = await uploadFromBuffer(panFile.buffer, 'kyc/pan', panFile.originalname);
+          const result = await uploadFromBuffer(panFile.buffer, 'pan', panFile.originalname);
           panCardUrl = result.secure_url;
         } catch (e) { console.error("PAN upload error:", e); }
       }
       if (expFile && expFile.buffer) {
         try {
-          const result = await uploadFromBuffer(expFile.buffer, 'kyc/certificates', expFile.originalname);
+          const result = await uploadFromBuffer(expFile.buffer, 'certificates', expFile.originalname);
           experienceCertificateUrl = result.secure_url;
         } catch (e) { console.error("Experience cert upload error:", e); }
       }
@@ -2744,21 +2744,21 @@ app.post('/api/auth/register/step3', (req, res, next) => {
       const aadhaarObjFile = req.files['aadhaarCard'] || req.files['aadhaarFront'] || req.files['aadhaar'];
       if (aadhaarObjFile && aadhaarObjFile[0]) {
         try {
-          const result = await uploadFromBuffer(aadhaarObjFile[0].buffer, 'kyc/aadhaar', aadhaarObjFile[0].originalname);
+          const result = await uploadFromBuffer(aadhaarObjFile[0].buffer, 'aadhaar', aadhaarObjFile[0].originalname);
           aadhaarCardUrl = result.secure_url;
         } catch (e) { console.error("Aadhaar upload error:", e); }
       }
       const panObjFile = req.files['panCard'] || req.files['pan'];
       if (panObjFile && panObjFile[0]) {
         try {
-          const result = await uploadFromBuffer(panObjFile[0].buffer, 'kyc/pan', panObjFile[0].originalname);
+          const result = await uploadFromBuffer(panObjFile[0].buffer, 'pan', panObjFile[0].originalname);
           panCardUrl = result.secure_url;
         } catch (e) { console.error("PAN upload error:", e); }
       }
       const expObjFile = req.files['experienceCertificate'] || req.files['certificate'] || req.files['experienceCert'] || req.files['cert'] || req.files['experience_certificate'];
       if (expObjFile && expObjFile[0]) {
         try {
-          const result = await uploadFromBuffer(expObjFile[0].buffer, 'kyc/certificates', expObjFile[0].originalname);
+          const result = await uploadFromBuffer(expObjFile[0].buffer, 'certificates', expObjFile[0].originalname);
           experienceCertificateUrl = result.secure_url;
         } catch (e) { console.error("Exp cert upload error:", e); }
       }
