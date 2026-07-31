@@ -177,9 +177,23 @@ const saveFileLocally = (fileBuffer, folderName, originalName = 'upload.jpg') =>
 // Helper function to upload buffer data to Cloudinary via streams, with local disk fallback
 const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') => {
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn(`[uploadFromBuffer Timeout] ${folderName}: Returning default fallback.`);
+      resolve({
+        public_id: 'default',
+        secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
+        url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
+      });
+    }, 5000);
+
+    const safeResolve = (res) => {
+      clearTimeout(timeout);
+      resolve(res);
+    };
+
     try {
       if (!fileBuffer || !Buffer.isBuffer(fileBuffer)) {
-        return resolve({
+        return safeResolve({
           public_id: 'default',
           secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
           url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
@@ -193,12 +207,12 @@ const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') =
           },
           (error, result) => {
             if (result && result.secure_url) {
-              resolve(result);
+              safeResolve(result);
             } else {
               console.error(`[Cloudinary Upload Warning] ${folderName}:`, error ? (error.message || error) : 'No result');
-              saveFileLocally(fileBuffer, folderName, originalName).then(resolve).catch(err => {
+              saveFileLocally(fileBuffer, folderName, originalName).then(safeResolve).catch(err => {
                 console.error("[Local Save Fallback Error]:", err);
-                resolve({
+                safeResolve({
                   public_id: 'default',
                   secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
                   url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
@@ -210,8 +224,8 @@ const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') =
         try {
           streamifier.createReadStream(fileBuffer).pipe(cld_upload_stream);
         } catch (e) {
-          saveFileLocally(fileBuffer, folderName, originalName).then(resolve).catch(err => {
-            resolve({
+          saveFileLocally(fileBuffer, folderName, originalName).then(safeResolve).catch(err => {
+            safeResolve({
               public_id: 'default',
               secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
               url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
@@ -219,8 +233,8 @@ const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') =
           });
         }
       } else {
-        saveFileLocally(fileBuffer, folderName, originalName).then(resolve).catch(err => {
-          resolve({
+        saveFileLocally(fileBuffer, folderName, originalName).then(safeResolve).catch(err => {
+          safeResolve({
             public_id: 'default',
             secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
             url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
@@ -229,7 +243,7 @@ const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') =
       }
     } catch (err) {
       console.error("[uploadFromBuffer Catch Warning]:", err);
-      resolve({
+      safeResolve({
         public_id: 'default',
         secure_url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`,
         url: `https://res.cloudinary.com/elanmyjb/image/upload/v1785401674/${folderName}/sample.jpg`
