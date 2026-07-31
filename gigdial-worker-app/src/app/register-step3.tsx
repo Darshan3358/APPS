@@ -65,7 +65,7 @@ export default function RegisterStep3() {
         }
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
+          quality: 0.5,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
@@ -111,7 +111,7 @@ export default function RegisterStep3() {
         }
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
+          quality: 0.5,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
@@ -157,7 +157,7 @@ export default function RegisterStep3() {
         }
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
+          quality: 0.5,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
@@ -187,6 +187,14 @@ export default function RegisterStep3() {
       setSubmitError('Please select a Service Type.');
       return;
     }
+    if (!aadhaarNumber || aadhaarNumber.trim().length < 4) {
+      setSubmitError('Please enter a valid Aadhaar Number.');
+      return;
+    }
+    if (!panNumber || panNumber.trim().length < 4) {
+      setSubmitError('Please enter a valid PAN Number.');
+      return;
+    }
     if (!aadhaarUri) {
       setSubmitError('Aadhaar Card document upload is required.');
       return;
@@ -207,7 +215,9 @@ export default function RegisterStep3() {
         aadhaarFile,
         panFile,
         experienceCertUri,
-        experienceCertFile
+        experienceCertFile,
+        aadhaarNumber,
+        panNumber
       );
       setSubmitting(false);
 

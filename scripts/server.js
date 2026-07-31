@@ -16,6 +16,7 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 const server = http.createServer(app);
+server.timeout = 180000; // 3 minutes timeout for mobile file uploads
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -2699,6 +2700,31 @@ app.post('/api/auth/register/step3', (req, res, next) => {
   }
 }, async (req, res) => {
   try {
+    // ---- PATCH: fetch missing fields from temp_registrations ----
+    const emailFromBody = req.body ? req.body.email : null;
+    if (emailFromBody && db) {
+      try {
+        const tempReg = await db.collection('temp_registrations').findOne({ email: String(emailFromBody).trim().toLowerCase() });
+        if (tempReg && tempReg.userData) {
+          const requiredFields = ['name', 'email', 'password', 'phone', 'city', 'address', 'profilePhoto', 'mainCategory', 'dob', 'experience', 'serviceDescription'];
+          requiredFields.forEach(field => {
+            if (!req.body[field] && tempReg.userData[field] !== undefined && tempReg.userData[field] !== null) {
+              req.body[field] = tempReg.userData[field];
+            }
+          });
+          if (!req.body.aadhaarNumber && tempReg.userData.aadhaarNumber) {
+            req.body.aadhaarNumber = tempReg.userData.aadhaarNumber;
+          }
+          if (!req.body.panNumber && tempReg.userData.panNumber) {
+            req.body.panNumber = tempReg.userData.panNumber;
+          }
+        }
+      } catch (e) {
+        console.error("⚠️ temp_registrations merge warning:", e);
+      }
+    }
+    // ---- END PATCH ----
+
     const body = req.body || {};
     const {
       name, email, password, phone, city, address, profilePhoto,
@@ -2810,8 +2836,27 @@ app.post('/api/auth/register/step3', (req, res, next) => {
       try { parsedSkills = JSON.parse(additionalSkills); } catch { parsedSkills = Array.isArray(additionalSkills) ? additionalSkills : []; }
     }
 
-    let validDob = new Date(dob || '1995-01-01');
-    if (isNaN(validDob.getTime())) validDob = new Date('1995-01-01');
+    // Flexible date parsing supporting DD/MM/YYYY, YYYY-MM-DD, or ISO strings
+    const parseDobString = (dobStr) => {
+      if (!dobStr) return new Date('1995-01-01');
+      if (dobStr instanceof Date) return dobStr;
+      const str = String(dobStr).trim();
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 3) {
+          const d = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          const y = parseInt(parts[2], 10);
+          if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
+            return new Date(y, m, d);
+          }
+        }
+      }
+      const dt = new Date(str);
+      return isNaN(dt.getTime()) ? new Date('1995-01-01') : dt;
+    };
+
+    let validDob = parseDobString(dob);
 
     const hashedPassword = await bcrypt.hash(String(password).trim(), 8);
 

@@ -13,7 +13,7 @@ const getBaseURL = (): string => {
     }
   }
   return 'https://apps-pnsk.onrender.com';
-};
+}; 
 
 export const API_URL = `${getBaseURL()}/api`;
 export const SOCKET_URL = getBaseURL();

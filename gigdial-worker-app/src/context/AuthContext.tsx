@@ -29,7 +29,7 @@ interface AuthContextType {
   logout: () => void;
   registerStep1: (data: any) => Promise<{ success: boolean; error?: string }>;
   registerStep2: (data: any) => Promise<{ success: boolean; error?: string }>;
-  registerStep3: (serviceType: string, skills: string[], aadhaarUri: string, panUri: string, aadhaarFileWeb?: any, panFileWeb?: any, experienceCertUri?: string, experienceCertFileWeb?: any) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; email?: string }>;
+  registerStep3: (serviceType: string, skills: string[], aadhaarUri: string, panUri: string, aadhaarFileWeb?: any, panFileWeb?: any, experienceCertUri?: string, experienceCertFileWeb?: any, aadhaarNumber?: string, panNumber?: string) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; email?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   tempRegData: any;
   setTempRegData: React.Dispatch<React.SetStateAction<any>>;
@@ -232,15 +232,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     aadhaarFileWeb?: any,
     panFileWeb?: any,
     experienceCertUri?: string,
-    experienceCertFileWeb?: any
+    experienceCertFileWeb?: any,
+    aadhaarNumber?: string,
+    panNumber?: string
   ) => {
     try {
+      if (!tempRegData.name || !tempRegData.email || !tempRegData.phone || !tempRegData.city) {
+        return { success: false, error: 'Registration details missing. Please complete Step 1 first.' };
+      }
+
       const formData = new FormData();
       
+      // Update tempRegData with step 3 numbers if passed
+      const aNum = aadhaarNumber || tempRegData.aadhaarNumber || '';
+      const pNum = panNumber || tempRegData.panNumber || '';
+
       // Append Step 1 & Step 2 cached fields
       const cachedFields = [
         'name', 'email', 'password', 'phone', 'city', 'address', 'profilePhoto',
-        'mainCategory', 'dob', 'experience', 'serviceDescription', 'aadhaarNumber', 'panNumber'
+        'mainCategory', 'dob', 'experience', 'serviceDescription'
       ];
       
       cachedFields.forEach(field => {
@@ -248,6 +258,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           formData.append(field, String(tempRegData[field]));
         }
       });
+
+      formData.append('aadhaarNumber', String(aNum));
+      formData.append('panNumber', String(pNum));
 
       // Append languages array
       if (tempRegData.languages) {

@@ -196,7 +196,7 @@ export default function RegisterStep2() {
         }
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
+          quality: 0.5,
         });
         if (!result.canceled && result.assets && result.assets[0]) {
           const asset = result.assets[0];
