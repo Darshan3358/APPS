@@ -1592,7 +1592,9 @@ app.get('/api/customer/workers', async (req, res) => {
       if (u.email) seenIds.add(u.email);
 
       const onlineFlag = u.isOnline !== false && u.isOnline !== 'false';
-      const prof = u.mainCategory || u.category || u.profession || 'Service Provider';
+      const rawProf = u.mainCategory || u.category || u.profession || 'Service Provider';
+      // Only show primary service (first category in comma-separated list)
+      const prof = rawProf.split(',')[0].trim();
       const userSkills = [...(Array.isArray(u.skills) ? u.skills : []), ...(Array.isArray(u.additionalSkills) ? u.additionalSkills : [])];
 
       merged.push({
@@ -1633,7 +1635,9 @@ app.get('/api/customer/workers', async (req, res) => {
         if (userBlocked) continue;
 
         const onlineFlag = w.isOnline !== false && w.isOnline !== 'false';
-        const prof = w.mainCategory || w.category || w.profession || 'Service Provider';
+        const rawProf = w.mainCategory || w.category || w.profession || 'Service Provider';
+        // Only show primary service (first category in comma-separated list)
+        const prof = rawProf.split(',')[0].trim();
         const workerSkills = [...(Array.isArray(w.skills) ? w.skills : []), ...(Array.isArray(w.additionalSkills) ? w.additionalSkills : [])];
 
         merged.push({
@@ -1659,7 +1663,9 @@ app.get('/api/customer/workers', async (req, res) => {
     }
 
     // Sort by rating descending and return top 10 for "Top Rated Professionals"
+    // Only show online workers to customers
     const topRated = merged
+      .filter(w => w.isOnline === true)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 10);
 
@@ -1690,12 +1696,14 @@ app.get('/api/customer/workers/all', async (req, res) => {
       if (u.email) seenIds.add(u.email);
 
       const onlineFlag = u.isOnline !== false && u.isOnline !== 'false';
+      const rawProfU = u.mainCategory || u.category || u.profession || 'Service Provider';
+      const profU = rawProfU.split(',')[0].trim();
 
       merged.push({
         id: u._id.toString(),
         name: u.name || 'Service Provider',
         profilePhoto: u.profilePhoto,
-        profession: u.category || u.profession || 'Service Provider',
+        profession: profU,
         rating: u.rating || 4.9,
         reviewsCount: u.reviewsCount || 12,
         experience: u.experience ? `${u.experience} Years Experience` : '',
@@ -1723,12 +1731,14 @@ app.get('/api/customer/workers/all', async (req, res) => {
         if (userBlocked) continue;
 
         const onlineFlag = w.isOnline !== false && w.isOnline !== 'false';
+        const rawProfW = w.mainCategory || w.category || w.profession || 'Service Provider';
+        const profW = rawProfW.split(',')[0].trim();
 
         merged.push({
           id: w._id.toString(),
           name: w.name || 'Service Provider',
           profilePhoto: w.image,
-          profession: w.profession || 'Service Provider',
+          profession: profW,
           rating: w.rating || 4.8,
           reviewsCount: w.reviewsCount || 8,
           experience: w.experience || '',
@@ -1740,7 +1750,8 @@ app.get('/api/customer/workers/all', async (req, res) => {
       }
     }
 
-    res.json(merged.sort((a, b) => b.rating - a.rating));
+    // Only show online workers
+    res.json(merged.filter(w => w.isOnline === true).sort((a, b) => b.rating - a.rating));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

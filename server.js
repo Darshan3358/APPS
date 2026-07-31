@@ -178,6 +178,7 @@ const saveFileLocally = (fileBuffer, folderName, originalName = 'upload.jpg') =>
 const uploadFromBuffer = (fileBuffer, folderName, originalName = 'upload.jpg') => {
   return new Promise((resolve) => {
     // Generate a unique public_id so each worker gets their own file, not a shared sample
+    const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
     const uniqueId = `${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
     const publicId = `${folderName}_${uniqueId}`;
 
@@ -527,17 +528,17 @@ const sendEmail = ({ to, subject, text, html }) => {
     },
     body: JSON.stringify(body)
   })
-  .then(async (res) => {
-    if (res.ok) {
-      console.log(`[SendGrid] ✅ Email sent to ${to}`);
-    } else {
-      const errText = await res.text();
-      console.error(`[SendGrid] ❌ Failed to send email to ${to}:`, errText);
-    }
-  })
-  .catch((err) => {
-    console.error(`[SendGrid] ❌ Network error sending to ${to}:`, err.message);
-  });
+    .then(async (res) => {
+      if (res.ok) {
+        console.log(`[SendGrid] ✅ Email sent to ${to}`);
+      } else {
+        const errText = await res.text();
+        console.error(`[SendGrid] ❌ Failed to send email to ${to}:`, errText);
+      }
+    })
+    .catch((err) => {
+      console.error(`[SendGrid] ❌ Network error sending to ${to}:`, err.message);
+    });
 
   return Promise.resolve({ success: true, message: 'Sending via SendGrid' });
 };
@@ -572,18 +573,18 @@ async function sendNotification(notificationData) {
       timestamp: Date.now(),
       createdAt: new Date()
     };
-    
+
     const result = await db.collection('notifications').insertOne(notification);
     const savedNotification = { ...notification, _id: result.insertedId.toString() };
-    
+
     // Broadcast to Admin room
     io.to('admin').emit('new_notification', savedNotification);
-    
+
     // Broadcast to target user if specified
     if (notification.uid && notification.uid !== 'admin') {
       io.to(notification.uid).emit('new_notification', savedNotification);
     }
-    
+
     console.log(`📡 Notification broadcasted: "${notification.title}" to ${notification.uid}`);
     return savedNotification;
   } catch (err) {
@@ -700,7 +701,7 @@ async function syncExistingReviews() {
   try {
     const ratedBookings = await db.collection('bookings').find({ rating: { $exists: true, $ne: null } }).toArray();
     console.log(`🔍 Found ${ratedBookings.length} rated bookings to sync.`);
-    
+
     for (const booking of ratedBookings) {
       const bookingIdStr = booking._id.toString();
       const existingReview = await db.collection('reviews').findOne({ bookingId: bookingIdStr });
@@ -712,7 +713,7 @@ async function syncExistingReviews() {
             if (customerObj) {
               customerName = customerObj.name || 'Anonymous';
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         let workerName = 'Service Partner';
@@ -722,7 +723,7 @@ async function syncExistingReviews() {
             if (workerObj) {
               workerName = workerObj.name || 'Service Partner';
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         const newReview = {
@@ -773,15 +774,15 @@ function getSearchQuery(search, fields) {
 app.get('/api/stats', async (req, res) => {
   try {
     const totalUsers = await db.collection('users').countDocuments();
-    
+
     // Count all distinct workers in users and workers collections
     const providerUsersCount = await db.collection('users').countDocuments({
       $or: [{ role: 'worker' }, { isProvider: true }]
     });
-    
+
     const workersColDocs = await db.collection('workers').find().toArray();
     let totalWorkers = providerUsersCount;
-    
+
     const userEmailsAndPhones = new Set();
     const activeSubscribers = await db.collection('users').find({
       $or: [{ role: 'worker' }, { isProvider: true }]
@@ -790,7 +791,7 @@ app.get('/api/stats', async (req, res) => {
       if (u.email) userEmailsAndPhones.add(u.email.toLowerCase());
       if (u.phone) userEmailsAndPhones.add(u.phone);
     });
-    
+
     for (const w of workersColDocs) {
       const emailMatch = w.email && userEmailsAndPhones.has(w.email.toLowerCase());
       const phoneMatch = w.phone && userEmailsAndPhones.has(w.phone);
@@ -811,7 +812,7 @@ app.get('/api/stats', async (req, res) => {
 
     // Mock weekly trends data points
     // Line chart coordinates for: Mon, Tue, Wed, Thu, Fri, Sat, Sun
-    const trends = [12, 19, 15, 25, 32, 28, 35]; 
+    const trends = [12, 19, 15, 25, 32, 28, 35];
 
     res.json({
       totalUsers,
@@ -829,7 +830,7 @@ app.get('/api/stats', async (req, res) => {
 app.get('/api/users/all', async (req, res) => {
   try {
     const { search } = req.query;
-    
+
     // Find users from users collection
     const userQuery = {};
     if (search) {
@@ -892,7 +893,7 @@ app.get('/api/users/all', async (req, res) => {
       if (!seenIds.has(idStr) && (!uidStr || !seenIds.has(uidStr))) {
         if (uidStr) seenIds.add(uidStr);
         seenIds.add(idStr);
-        
+
         let userDoc = null;
         try {
           if (uidStr && ObjectId.isValid(uidStr)) {
@@ -900,7 +901,7 @@ app.get('/api/users/all', async (req, res) => {
           } else if (ObjectId.isValid(idStr)) {
             userDoc = await db.collection('users').findOne({ _id: new ObjectId(idStr) });
           }
-        } catch (e) {}
+        } catch (e) { }
 
         merged.push({
           _id: w._id,
@@ -931,7 +932,7 @@ app.get('/api/users/all', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const { search } = req.query;
-    
+
     // Query only customers (exclude workers, providers, and admins)
     const query = {
       $and: [
@@ -978,7 +979,7 @@ app.post('/api/users/:id/toggle-block', async (req, res) => {
       await db.collection('workers').updateOne(
         { uid: id },
         { $set: { isBlocked: newBlockedStatus, updatedAt: new Date() } }
-      ).catch(() => {});
+      ).catch(() => { });
     }
 
     // Add activity log notification with socket broadcast
@@ -1013,13 +1014,13 @@ app.delete('/api/users/:id', async (req, res) => {
 app.post('/api/workers/:id/toggle-block', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Find in users collection
     let user = null;
     if (ObjectId.isValid(id)) {
       user = await db.collection('users').findOne({ _id: new ObjectId(id) });
     }
-    
+
     // Find in workers collection
     let worker = null;
     if (ObjectId.isValid(id)) {
@@ -1028,21 +1029,21 @@ app.post('/api/workers/:id/toggle-block', async (req, res) => {
     if (!worker) {
       worker = await db.collection('workers').findOne({ uid: id });
     }
-    
+
     if (!user && !worker) {
       return res.status(404).json({ error: "Professional not found" });
     }
-    
+
     const currentBlockedStatus = user ? user.isBlocked : worker.isBlocked;
     const newBlockedStatus = !currentBlockedStatus;
-    
+
     if (user) {
       await db.collection('users').updateOne(
         { _id: user._id },
         { $set: { isBlocked: newBlockedStatus, updatedAt: new Date() } }
       );
     }
-    
+
     if (worker) {
       await db.collection('workers').updateOne(
         { _id: worker._id },
@@ -1052,18 +1053,18 @@ app.post('/api/workers/:id/toggle-block', async (req, res) => {
         await db.collection('users').updateOne(
           { _id: new ObjectId(worker.uid) },
           { $set: { isBlocked: newBlockedStatus, updatedAt: new Date() } }
-        ).catch(() => {});
+        ).catch(() => { });
       }
     } else if (user) {
       // Also update workers collection if user is worker
       await db.collection('workers').updateOne(
         { uid: user._id.toString() },
         { $set: { isBlocked: newBlockedStatus, updatedAt: new Date() } }
-      ).catch(() => {});
+      ).catch(() => { });
     }
-    
+
     const targetUid = user ? user._id.toString() : (worker ? (worker.uid || worker._id.toString()) : 'admin');
-    
+
     // Trigger notification with socket broadcast
     await sendNotification({
       uid: targetUid,
@@ -1071,7 +1072,7 @@ app.post('/api/workers/:id/toggle-block', async (req, res) => {
       message: `Your professional account has been ${newBlockedStatus ? 'suspended/blocked' : 'activated/unblocked'} by the admin.`,
       type: 'status'
     });
-    
+
     res.json({ success: true, isBlocked: newBlockedStatus });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1148,7 +1149,7 @@ app.get('/api/workers', async (req, res) => {
           if (!userDoc && w.email) {
             userDoc = await db.collection('users').findOne({ email: w.email });
           }
-        } catch (e) {}
+        } catch (e) { }
 
         // Prefer userDoc for KYC docs, fallback to worker doc
         const aadhaarCard = (userDoc && userDoc.aadhaarCard) ? userDoc.aadhaarCard : (w.aadhaarCard || '');
@@ -1257,7 +1258,7 @@ app.post('/api/workers/:id/reject', async (req, res) => {
     const { id } = req.params;
 
     // 1. Fetch user details to get email & name before deleting
-    const user = await db.collection('users').findOne({ 
+    const user = await db.collection('users').findOne({
       $or: [
         { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
         { uid: id }
@@ -1348,14 +1349,14 @@ app.post('/api/bookings/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body; // e.g. "completed" or "cancelled"
-    
+
     await db.collection('bookings').updateOne(
       { _id: new ObjectId(id) },
       { $set: { status, updatedAt: Date.now() } }
     );
 
     const booking = await db.collection('bookings').findOne({ _id: new ObjectId(id) });
-    
+
     // Add Notification
     await sendNotification({
       uid: booking.workerName || 'admin',
@@ -1399,13 +1400,13 @@ app.get('/api/subscriptions', async (req, res) => {
         partnerName: user.name,
         planName: planLabels[user.subscription?.plan] || user.subscription?.plan || 'Monthly Plan',
         amount: user.subscription?.plan === 'monthly' ? 499
-               : user.subscription?.plan === 'quarterly' ? 999
-               : user.subscription?.plan === 'yearly' ? 1999
-               : 499,
+          : user.subscription?.plan === 'quarterly' ? 999
+            : user.subscription?.plan === 'yearly' ? 1999
+              : 499,
         paymentMethod: user.subscription?.paymentMethod || 'UPI',
         status: user.subscription?.refundStatus === 'refunded' ? 'Refunded'
-               : user.subscription?.refundStatus === 'pending' ? 'Refund Pending'
-               : 'Success',
+          : user.subscription?.refundStatus === 'pending' ? 'Refund Pending'
+            : 'Success',
         startDate: user.subscription?.startDate,
         endDate: user.subscription?.endDate,
         date: user.subscription?.startDate || user.createdAt || new Date().toISOString()
@@ -1429,15 +1430,17 @@ app.get('/api/subscriptions', async (req, res) => {
 app.post('/api/subscriptions/:id/refund', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Attempt to update subscription in users collection
     await db.collection('users').updateOne(
       { _id: new ObjectId(id) },
-      { $set: { 
-        'subscription.refundStatus': 'refunded',
-        'subscription.isActive': false,
-        updatedAt: new Date()
-      }}
+      {
+        $set: {
+          'subscription.refundStatus': 'refunded',
+          'subscription.isActive': false,
+          updatedAt: new Date()
+        }
+      }
     );
 
     // Also update subscriptions collection if it exists
@@ -1446,7 +1449,7 @@ app.post('/api/subscriptions/:id/refund', async (req, res) => {
         { _id: new ObjectId(id) },
         { $set: { status: 'Refunded' } }
       );
-    } catch(e) {}
+    } catch (e) { }
 
     // Add log
     await sendNotification({
@@ -1466,7 +1469,7 @@ app.post('/api/subscriptions/:id/refund', async (req, res) => {
 app.get('/api/reports', async (req, res) => {
   try {
     const notifications = await db.collection('notifications').find().sort({ timestamp: -1 }).limit(20).toArray();
-    
+
     // Map notifications to the timeline format
     const timeline = notifications.map((n, idx) => {
       let category = "System";
@@ -1536,10 +1539,10 @@ app.get('/api/settings', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
   try {
     const { platformFeeRate, maintenanceMode, allowNewRegistrations } = req.body;
-    
+
     await db.collection('commissions').updateOne(
       { type: 'global_settings' },
-      { 
+      {
         $set: {
           platformFeeRate: Number(platformFeeRate) || 12.0,
           maintenanceMode: !!maintenanceMode,
@@ -1589,7 +1592,9 @@ app.get('/api/customer/workers', async (req, res) => {
       if (u.email) seenIds.add(u.email);
 
       const onlineFlag = u.isOnline !== false && u.isOnline !== 'false';
-      const prof = u.mainCategory || u.category || u.profession || 'Service Provider';
+      const rawProf = u.mainCategory || u.category || u.profession || 'Service Provider';
+      // Only show primary service (first category in comma-separated list)
+      const prof = rawProf.split(',')[0].trim();
       const userSkills = [...(Array.isArray(u.skills) ? u.skills : []), ...(Array.isArray(u.additionalSkills) ? u.additionalSkills : [])];
 
       merged.push({
@@ -1625,12 +1630,14 @@ app.get('/api/customer/workers', async (req, res) => {
             const userDoc = await db.collection('users').findOne({ _id: new ObjectId(uidStr) });
             if (userDoc && userDoc.isBlocked) userBlocked = true;
           }
-        } catch (e) {}
+        } catch (e) { }
 
         if (userBlocked) continue;
 
         const onlineFlag = w.isOnline !== false && w.isOnline !== 'false';
-        const prof = w.mainCategory || w.category || w.profession || 'Service Provider';
+        const rawProf = w.mainCategory || w.category || w.profession || 'Service Provider';
+        // Only show primary service (first category in comma-separated list)
+        const prof = rawProf.split(',')[0].trim();
         const workerSkills = [...(Array.isArray(w.skills) ? w.skills : []), ...(Array.isArray(w.additionalSkills) ? w.additionalSkills : [])];
 
         merged.push({
@@ -1656,7 +1663,9 @@ app.get('/api/customer/workers', async (req, res) => {
     }
 
     // Sort by rating descending and return top 10 for "Top Rated Professionals"
+    // Only show online workers to customers
     const topRated = merged
+      .filter(w => w.isOnline === true)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 10);
 
@@ -1687,12 +1696,14 @@ app.get('/api/customer/workers/all', async (req, res) => {
       if (u.email) seenIds.add(u.email);
 
       const onlineFlag = u.isOnline !== false && u.isOnline !== 'false';
+      const rawProfU = u.mainCategory || u.category || u.profession || 'Service Provider';
+      const profU = rawProfU.split(',')[0].trim();
 
       merged.push({
         id: u._id.toString(),
         name: u.name || 'Service Provider',
         profilePhoto: u.profilePhoto,
-        profession: u.category || u.profession || 'Service Provider',
+        profession: profU,
         rating: u.rating || 4.9,
         reviewsCount: u.reviewsCount || 12,
         experience: u.experience ? `${u.experience} Years Experience` : '',
@@ -1715,17 +1726,19 @@ app.get('/api/customer/workers/all', async (req, res) => {
             const userDoc = await db.collection('users').findOne({ _id: new ObjectId(uidStr) });
             if (userDoc && userDoc.isBlocked) userBlocked = true;
           }
-        } catch (e) {}
+        } catch (e) { }
 
         if (userBlocked) continue;
 
         const onlineFlag = w.isOnline !== false && w.isOnline !== 'false';
+        const rawProfW = w.mainCategory || w.category || w.profession || 'Service Provider';
+        const profW = rawProfW.split(',')[0].trim();
 
         merged.push({
           id: w._id.toString(),
           name: w.name || 'Service Provider',
           profilePhoto: w.image,
-          profession: w.profession || 'Service Provider',
+          profession: profW,
           rating: w.rating || 4.8,
           reviewsCount: w.reviewsCount || 8,
           experience: w.experience || '',
@@ -1737,7 +1750,8 @@ app.get('/api/customer/workers/all', async (req, res) => {
       }
     }
 
-    res.json(merged.sort((a, b) => b.rating - a.rating));
+    // Only show online workers
+    res.json(merged.filter(w => w.isOnline === true).sort((a, b) => b.rating - a.rating));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1804,7 +1818,7 @@ app.get('/api/customer/bookings/search', async (req, res) => {
 app.post('/api/customer/bookings', async (req, res) => {
   try {
     const booking = req.body;
-    
+
     // Deduplication check: check if a booking with same customer, title, schedule, and address was created within the last 2 minutes
     const twoMinutesAgo = Date.now() - (2 * 60 * 1000);
     const duplicate = await db.collection('bookings').findOne({
@@ -1820,10 +1834,10 @@ app.post('/api/customer/bookings', async (req, res) => {
     }
 
     booking.createdAt = Date.now();
-    
+
     // Add default status and default worker image if none exists
     booking.status = booking.status || 'Pending';
-    
+
     const result = await db.collection('bookings').insertOne(booking);
 
     // Broadcast socket event for real-time lead overlay popups in worker app
@@ -1866,7 +1880,7 @@ app.post('/api/customer/bookings/:id/rate', async (req, res) => {
     const { id } = req.params;
     const { rating, review } = req.body;
     const otp = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
-    
+
     // Update booking
     await db.collection('bookings').updateOne(
       { _id: new ObjectId(id) },
@@ -1880,7 +1894,7 @@ app.post('/api/customer/bookings/:id/rate', async (req, res) => {
     // Resolve Customer and Worker names
     const customer = await db.collection('users').findOne({ _id: new ObjectId(booking.customerId) });
     const worker = await db.collection('users').findOne({ _id: new ObjectId(booking.workerId) });
-    
+
     const customerName = customer ? customer.name : 'Anonymous';
     const workerName = worker ? worker.name : 'Service Partner';
 
@@ -1914,27 +1928,27 @@ app.post('/api/customer/bookings/:id/rate', async (req, res) => {
     ];
     const stats = await db.collection('reviews').aggregate(pipeline).toArray();
     const newAvg = stats.length > 0 ? stats[0].avgRating : Number(rating);
-    
+
     // Update workers and users collection ratings
     await db.collection('workers').updateOne(
       { uid: booking.workerId },
       { $set: { rating: newAvg } }
-    ).catch(() => {});
+    ).catch(() => { });
 
     await db.collection('users').updateOne(
       { _id: new ObjectId(booking.workerId) },
       { $set: { rating: newAvg } }
-    ).catch(() => {});
+    ).catch(() => { });
 
     if (!existingReview) {
       await db.collection('workers').updateOne(
         { uid: booking.workerId },
         { $inc: { reviewsCount: 1 } }
-      ).catch(() => {});
+      ).catch(() => { });
       await db.collection('users').updateOne(
         { _id: new ObjectId(booking.workerId) },
         { $inc: { reviewsCount: 1 } }
-      ).catch(() => {});
+      ).catch(() => { });
     }
 
     res.json({ success: true, completionOtp: otp });
@@ -1988,7 +2002,7 @@ app.post('/api/worker/profile', async (req, res) => {
   try {
     const { phone, name, email, category, experience, location, customSkillsInput, description } = req.body;
     if (!phone) return res.status(400).json({ error: "phone is required" });
-    
+
     const updateFields = {
       name,
       email,
@@ -2012,16 +2026,18 @@ app.post('/api/worker/profile', async (req, res) => {
     // Also sync/create in workers collection
     await db.collection('workers').updateOne(
       { phone },
-      { $set: {
-        name,
-        email,
-        phone,
-        profession: category,
-        experience: `${experience} Years Experience`,
-        city: location,
-        about: description,
-        updatedAt: new Date()
-      }},
+      {
+        $set: {
+          name,
+          email,
+          phone,
+          profession: category,
+          experience: `${experience} Years Experience`,
+          city: location,
+          about: description,
+          updatedAt: new Date()
+        }
+      },
       { upsert: true }
     );
 
@@ -2046,13 +2062,15 @@ app.post('/api/worker/subscription', async (req, res) => {
 
     await db.collection('workers').updateOne(
       { phone },
-      { $set: { 
-        subscription: {
-          plan: subscription.planName,
-          status: subscription.isActive ? 'active' : 'inactive'
-        }, 
-        updatedAt: new Date() 
-      } }
+      {
+        $set: {
+          subscription: {
+            plan: subscription.planName,
+            status: subscription.isActive ? 'active' : 'inactive'
+          },
+          updatedAt: new Date()
+        }
+      }
     );
 
     res.json({ success: true });
@@ -2065,7 +2083,7 @@ app.post('/api/worker/subscription', async (req, res) => {
 app.get('/api/worker/bookings', async (req, res) => {
   try {
     const { workerName, workerId } = req.query;
-    
+
     // We construct an OR list. We match:
     // 1. Any booking with status 'pending' or 'Pending' (these are open leads)
     // 2. Any booking assigned to this worker specifically by workerId
@@ -2097,7 +2115,7 @@ app.post('/api/worker/bookings/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status, workerName } = req.body;
-    
+
     const updateDoc = { status, updatedAt: Date.now() };
     if (workerName) {
       updateDoc.workerName = workerName;
@@ -2143,7 +2161,7 @@ app.post('/api/bookings/:id/chats', auth, async (req, res) => {
     if (!allowed) return res.status(403).json({ error: 'Forbidden: Access denied to this booking chat' });
 
     const { senderRole, text, type, imageUrl, location } = req.body;
-    
+
     const dateObj = new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -2160,7 +2178,7 @@ app.post('/api/bookings/:id/chats', auth, async (req, res) => {
     };
 
     await db.collection('chats').insertOne(message);
-    
+
     // Emit message ONLY to booking room booking_<id> in real-time
     io.to(id).to(`booking_${id}`).emit('receive_message', message);
 
@@ -2205,7 +2223,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // Check if phone or email already exists for this role
-    const existingUser = await db.collection('users').findOne({ 
+    const existingUser = await db.collection('users').findOne({
       $or: [
         { email: email.trim().toLowerCase(), role },
         { phone: phone.trim(), role }
@@ -2311,7 +2329,7 @@ app.post('/api/auth/login', async (req, res) => {
     } else {
       // Plain text fallback
       isValidPasscode = (storedCredential === passcode.trim());
-      
+
       if (isValidPasscode) {
         // Upgrade password to hash on the fly for security!
         try {
@@ -2361,7 +2379,7 @@ app.post('/api/auth/login-send-otp', async (req, res) => {
 
     // 1. Find user in users collection
     let user = await db.collection('users').findOne({ email: emailTrim, role });
-    
+
     // If worker not found in users but exists in workers collection
     if (!user && role === 'worker') {
       const worker = await db.collection('workers').findOne({ email: emailTrim });
@@ -2903,12 +2921,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required." });
-    
+
     const user = await db.collection('users').findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(404).json({ error: "No account found with this email." });
     }
-    
+
     res.json({ success: true, message: "Password reset link sent to your email." });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2921,17 +2939,17 @@ app.post('/api/auth/reset-password', async (req, res) => {
     if (!email || !newPassword) {
       return res.status(400).json({ error: "Email and newPassword are required." });
     }
-    
+
     const hashedPassword = await bcrypt.hash(newPassword.trim(), 8);
     const result = await db.collection('users').updateOne(
       { email: email.toLowerCase() },
       { $set: { passcode: hashedPassword, updatedAt: new Date() } }
     );
-    
+
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: "User not found." });
     }
-    
+
     res.json({ success: true, message: "Password has been reset successfully." });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3018,7 +3036,7 @@ app.post('/api/auth/register-worker', async (req, res) => {
 
     const result = await db.collection('users').insertOne(newUser);
     await db.collection('workers').insertOne(newWorker);
-    
+
     const token = jwt.sign({ userId: result.insertedId.toString(), role: 'worker' }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ success: true, token, worker: newWorker });
   } catch (err) {
@@ -3182,12 +3200,12 @@ app.post('/api/worker/complete-membership-payment', auth, async (req, res) => {
     await db.collection('users').updateOne(query, { $set: updateData });
     await db.collection('workers').updateOne(
       { $or: [{ uid: userId }, { email: req.user.email }] },
-      { 
-        $set: { 
+      {
+        $set: {
           subscription: { plan: plan, status: 'active', active: true, expiryDate: expiry },
           isActive: true,
           updatedAt: new Date()
-        } 
+        }
       },
       { upsert: true }
     );
@@ -3234,7 +3252,7 @@ app.put('/api/auth/update-user/:uid', async (req, res) => {
   try {
     const { uid } = req.params;
     const { name, phone, email } = req.body;
-    
+
     const updateFields = {};
     if (name) updateFields.name = name;
     if (phone) updateFields.phone = phone;
@@ -3346,7 +3364,7 @@ app.post('/api/bookings/create', async (req, res) => {
     };
 
     const result = await db.collection('bookings').insertOne(newBooking);
-    
+
     // Broadcast socket event
     io.emit('new_lead', {
       id: result.insertedId.toString(),
@@ -3566,7 +3584,7 @@ app.get('/api/customer/bookings', async (req, res) => {
         if (decoded && decoded.userId && ObjectId.isValid(decoded.userId)) {
           user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const emailQuery = (req.query.email || req.header('X-User-Email') || user?.email || '').trim();
@@ -3623,7 +3641,7 @@ app.get('/api/bookings/user/:customerId', auth, async (req, res) => {
     }
 
     const bookings = await db.collection('bookings').find({ $or: queryConditions }).sort({ createdAt: -1 }).toArray();
-    
+
     // Secure OTP exposure: only return completionOtp if customer has rated the worker
     const securedBookings = bookings.map(b => {
       const copy = { ...b };
@@ -3654,7 +3672,7 @@ app.put('/api/bookings/accept/:id', async (req, res) => {
     // Check if worker exists to get their name and photo
     const worker = await db.collection('workers').findOne({ uid: workerId });
     const userAcc = await db.collection('users').findOne({ _id: ObjectId.isValid(workerId) ? new ObjectId(workerId) : null });
-    
+
     // Check subscription status
     const sub = userAcc?.subscription || { plan: 'none', status: 'inactive' };
     const isActive = sub.isActive === true || sub.status === 'active';
@@ -3667,12 +3685,14 @@ app.put('/api/bookings/accept/:id', async (req, res) => {
 
     await db.collection('bookings').updateOne(
       { _id: new ObjectId(id) },
-      { $set: { 
-        workerId, 
-        workerName, 
-        workerPhoto: workerPhoto || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100',
-        status: 'accepted' 
-      } }
+      {
+        $set: {
+          workerId,
+          workerName,
+          workerPhoto: workerPhoto || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100',
+          status: 'accepted'
+        }
+      }
     );
 
     // Send emails asynchronously (don't block the HTTP response if emails fail)
@@ -3744,8 +3764,8 @@ app.put('/api/bookings/reject/:id', async (req, res) => {
 
     await db.collection('bookings').updateOne(
       { $or: queryConditions },
-      { 
-        $set: { 
+      {
+        $set: {
           status: 'cancelled',
           cancelledBy: 'worker',
           rejectedByWorker: true,
@@ -4452,7 +4472,7 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
     }
 
     const workerDoc = await db.collection('workers').findOne({ $or: queryConditions })
-                   || await db.collection('users').findOne({ $or: queryConditions });
+      || await db.collection('users').findOne({ $or: queryConditions });
 
     const workerCategory = workerDoc ? (workerDoc.mainCategory || workerDoc.category || '') : '';
     const workerName = workerDoc?.name || uid;
@@ -4506,7 +4526,7 @@ app.get('/api/worker/:uid/dashboard', async (req, res) => {
 
     // 3. Profile Views & Rating
     const profileViews = (workerDoc && (workerDoc.profileViews || workerDoc.views)) ? (workerDoc.profileViews || workerDoc.views) : 12;
-    
+
     let rating = 5.0;
     if (workerDoc) {
       if (workerDoc.rating && Number(workerDoc.rating) > 0) {
@@ -4663,11 +4683,11 @@ const handleOnlineStatus = async (req, res) => {
     );
 
     // Emit real-time socket event for online status update to all connected clients
-    io.emit('worker_status_change', { 
-      uid, 
-      id: userObjId ? userObjId.toString() : uid, 
+    io.emit('worker_status_change', {
+      uid,
+      id: userObjId ? userObjId.toString() : uid,
       name: userName || uid,
-      isOnline: onlineVal 
+      isOnline: onlineVal
     });
 
     console.log(`🟢 Worker status updated: ${userName || uid} -> ${onlineVal ? 'ONLINE' : 'OFFLINE'}`);
@@ -4687,7 +4707,7 @@ app.post('/api/workers/:uid/online-status', handleOnlineStatus);
 app.get('/api/worker/:uid/subscription', async (req, res) => {
   try {
     const { uid } = req.params;
-    
+
     // Check in users first
     let user = await db.collection('users').findOne({
       $or: [{ uid: uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }]
@@ -4698,10 +4718,10 @@ app.get('/api/worker/:uid/subscription', async (req, res) => {
     }
 
     const sub = user.subscription || { plan: 'none', status: 'inactive' };
-    
+
     // Support both schema variations: status === 'active' or isActive === true
     const isActive = sub.isActive === true || sub.status === 'active';
-    
+
     let remainingDays = 0;
     if (isActive && sub.endDate) {
       const now = new Date();
@@ -4915,28 +4935,32 @@ app.post('/api/payments/:id/approve', async (req, res) => {
     // 2. Update the worker subscription in 'workers' collection
     await db.collection('workers').updateOne(
       { uid: payment.workerUid },
-      { $set: { 
-        subscription: {
-          plan: payment.plan || 'pro',
-          status: 'active',
-          expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        },
-        updatedAt: new Date()
-      } }
+      {
+        $set: {
+          subscription: {
+            plan: payment.plan || 'pro',
+            status: 'active',
+            expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          },
+          updatedAt: new Date()
+        }
+      }
     );
 
     // 3. Update the worker subscription in 'users' collection (for auth session loading)
     await db.collection('users').updateOne(
       { uid: payment.workerUid },
-      { $set: { 
-        subscription: {
-          isActive: true,
-          planName: payment.plan === 'pro' ? 'GigDial Pro' : (payment.plan || 'Pro Plan'),
-          price: '₹499 / Month',
-          remainingDays: 30
-        },
-        updatedAt: new Date()
-      } }
+      {
+        $set: {
+          subscription: {
+            isActive: true,
+            planName: payment.plan === 'pro' ? 'GigDial Pro' : (payment.plan || 'Pro Plan'),
+            price: '₹499 / Month',
+            remainingDays: 30
+          },
+          updatedAt: new Date()
+        }
+      }
     );
 
     res.json({ success: true, message: "Payment approved and worker subscription activated successfully." });
@@ -5229,7 +5253,7 @@ app.post('/api/worker/withdraw', auth, async (req, res) => {
     // Deduct balance immediately in pending state
     await db.collection('wallets').updateOne(
       { user: req.user._id },
-      { 
+      {
         $inc: { balance: -Number(amount) },
         $push: {
           transactions: {
@@ -5300,7 +5324,7 @@ app.put('/api/admin/withdrawals/:id', auth, async (req, res) => {
       // Return funds back to worker
       await db.collection('wallets').updateOne(
         { user: withdrawal.user },
-        { 
+        {
           $inc: { balance: withdrawal.amount },
           $push: {
             transactions: {
@@ -5723,7 +5747,7 @@ app.put('/api/support/tickets/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, priority } = req.body;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ticket ID" });
-    
+
     const updateObj = {};
     if (status !== undefined) updateObj.status = status;
     if (priority !== undefined) updateObj.priority = priority;
@@ -5790,7 +5814,7 @@ app.put('/api/banners/:id', async (req, res) => {
     const updateData = { ...req.body };
     delete updateData._id;
     updateData.updatedAt = new Date();
-    
+
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid banner ID" });
     await db.collection('banners').updateOne(
       { _id: new ObjectId(id) },
@@ -5871,7 +5895,7 @@ app.put('/api/blogs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid blog ID" });
-    
+
     const updateData = { ...req.body };
     delete updateData._id;
     updateData.updatedAt = new Date();
