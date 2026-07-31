@@ -335,7 +335,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           const text = await res.text();
           console.error('❌ Non-JSON response:', text);
-          return { success: false, error: `Server returned ${res.status}: ${text.replace(/<[^>]*>?/gm, '').substring(0, 150)}` };
+          return { success: false, error: 'Registration server error. Please check backend connection and try again.' };
         }
         if (!res.ok) return { success: false, error: resData.error || 'Step 3 failed' };
       } else {
@@ -355,8 +355,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
               } else {
                 console.error("❌ Non-JSON response received:", xhr.responseText);
-                const textPreview = xhr.responseText ? xhr.responseText.replace(/<[^>]*>?/gm, '').trim().substring(0, 150) : '';
-                reject(new Error(`Server returned ${xhr.status}: ${textPreview || 'Internal Server Error'}`));
+                reject(new Error('Registration server error. Please check backend connection and try again.'));
               }
             } catch (e) {
               reject(new Error(`Server response error (${xhr.status})`));

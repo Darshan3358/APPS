@@ -223,11 +223,25 @@ export default function RegisterStep3() {
           );
         }
       } else {
-        setSubmitError(res.error || 'Failed to submit documents.');
+        let cleanErr = (res.error || 'Failed to submit documents.')
+          .replace(/<[^>]*>?/gm, '')
+          .replace(/<!DOCTYPE.*?>/gi, '')
+          .trim();
+        if (!cleanErr || cleanErr.includes('Internal Server Error') || cleanErr.includes('html')) {
+          cleanErr = 'KYC submission failed. Please verify selected images and try again.';
+        }
+        setSubmitError(cleanErr);
       }
     } catch (err: any) {
       setSubmitting(false);
-      setSubmitError(err.message || 'Failed to connect to server.');
+      let cleanErr = (err.message || 'Failed to connect to server.')
+        .replace(/<[^>]*>?/gm, '')
+        .replace(/<!DOCTYPE.*?>/gi, '')
+        .trim();
+      if (!cleanErr || cleanErr.includes('Internal Server Error') || cleanErr.includes('html')) {
+        cleanErr = 'Network error. Please check your connection and try again.';
+      }
+      setSubmitError(cleanErr);
     }
   };
 
@@ -263,7 +277,10 @@ export default function RegisterStep3() {
         <View style={styles.cardContainer}>
           <Text style={styles.sectionTitle}>KYC Verification</Text>
           {submitError ? (
-            <Text style={styles.errorBanner}>{submitError}</Text>
+            <View style={styles.errorToastContainer}>
+              <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
+              <Text style={styles.errorToastText}>{submitError}</Text>
+            </View>
           ) : null}
 
           {/* Service Type Selection */}
@@ -606,15 +623,24 @@ const styles = StyleSheet.create({
   disabledBtn: {
     opacity: 0.7,
   },
-  errorBanner: {
-    color: '#EF4444',
+  errorToastContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FEE2E2',
-    padding: 12,
-    borderRadius: 10,
-    fontSize: 13,
-    textAlign: 'center',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     marginBottom: 16,
+    gap: 10,
+  },
+  errorToastText: {
+    flex: 1,
+    color: '#991B1B',
+    fontSize: 13,
     fontWeight: '600',
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,
