@@ -3,6 +3,7 @@
  */
 export const TOAST = {
   AUTH: {
+    WELCOME: "✅ Welcome back! Login successful.",
     LOGIN_SUCCESS: "✅ Welcome back! Login successful.",
     LOGIN_FAILED: "❌ Invalid email or password.",
     EMAIL_REQUIRED: "⚠️ Please enter your email.",

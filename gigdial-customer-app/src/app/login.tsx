@@ -34,7 +34,7 @@ export default function LoginScreen() {
 
     const res = await login(emailOrPhone, password);
     if (res.success) {
-      showToast(TOAST.AUTH.WELCOME, 'success');
+      showToast(TOAST.AUTH.WELCOME || TOAST.AUTH.LOGIN_SUCCESS || '✅ Welcome back! Login successful.', 'success');
       setTimeout(() => {
         router.replace((redirect as any) || '/(tabs)/dashboard');
       }, 1000);
