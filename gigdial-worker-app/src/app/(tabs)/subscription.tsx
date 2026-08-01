@@ -44,9 +44,10 @@ export default function SubscriptionTab() {
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
   const fetchSubscription = async () => {
-    if (!user?.id) return;
+    const identifier = user?.id || user?._id || user?.email;
+    if (!identifier) return;
     try {
-      const res = await fetch(`${LOCAL_API_URL}/worker/${user.id}/subscription`);
+      const res = await fetch(`${LOCAL_API_URL}/worker/${identifier}/subscription`);
       if (res.ok) {
         const data = await res.json();
         setSubData(data);
