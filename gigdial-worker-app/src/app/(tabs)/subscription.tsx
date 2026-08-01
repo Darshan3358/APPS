@@ -58,9 +58,10 @@ export default function SubscriptionTab() {
   };
 
   const fetchRequestHistory = async () => {
-    if (!token || !user?.id) return;
+    const workerId = user?.id || user?._id || user?.email;
+    if (!token || !workerId) return;
     try {
-      const res = await fetch(`${LOCAL_API_URL}/subscription/requests/worker/${user.id}`, {
+      const res = await fetch(`${LOCAL_API_URL}/subscription/requests/worker/${workerId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {

@@ -19,6 +19,7 @@ export interface User {
   kycStatus?: 'pending' | 'approved' | 'rejected';
   isApproved?: boolean;
   profilePhoto?: string;
+  _id?: string;
 }
 
 interface AuthContextType {
