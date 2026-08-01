@@ -2142,12 +2142,50 @@ app.post('/api/worker/bookings/:id/status', async (req, res) => {
 app.get('/api/bookings/:id/chats', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { allowed, notFound } = await verifyBookingOwnership(id, req.user);
+    const { allowed, notFound, booking } = await verifyBookingOwnership(id, req.user);
     if (notFound) return res.status(404).json({ error: 'Booking not found' });
     if (!allowed) return res.status(403).json({ error: 'Forbidden: Access denied to this booking chat' });
 
     const chats = await db.collection('chats').find({ bookingId: id }).sort({ timestamp: 1 }).toArray();
-    res.json(chats);
+
+    // Check worker's subscription status
+    const workerUid = booking ? (booking.workerId || booking.workerUid) : null;
+    let workerHasSub = false;
+
+    if (workerUid && db) {
+      const workerUser = await db.collection('users').findOne({
+        $or: [
+          { _id: ObjectId.isValid(workerUid) ? new ObjectId(workerUid) : null },
+          { uid: workerUid },
+          { email: String(workerUid).toLowerCase() }
+        ]
+      });
+      if (workerUser && workerUser.subscription) {
+        const sub = workerUser.subscription;
+        workerHasSub = sub.isActive === true || sub.active === true || sub.status === 'active';
+      }
+    }
+
+    if (!workerHasSub && req.user && req.user.role === 'worker') {
+      const sub = req.user.subscription;
+      if (sub) {
+        workerHasSub = sub.isActive === true || sub.active === true || sub.status === 'active';
+      }
+    }
+
+    const bookingStatus = booking ? (booking.status || 'accepted') : 'accepted';
+    const isPending = bookingStatus.toLowerCase() === 'pending';
+    const chatEnabled = workerHasSub && !isPending;
+
+    res.json({
+      messages: chats,
+      chatEnabled: chatEnabled,
+      workerHasSubscription: workerHasSub,
+      bookingStatus: bookingStatus,
+      customerName: booking ? (booking.customerName || booking.userName || 'Customer') : 'Customer',
+      customerPhoto: booking ? (booking.customerPhoto || booking.userPhoto || '') : '',
+      serviceName: booking ? (booking.serviceName || booking.category || booking.serviceType || 'Service Request') : 'Service Request'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
