@@ -1382,34 +1382,52 @@ app.get('/api/subscriptions', async (req, res) => {
     const dbSubs = await db.collection('subscriptions').find().toArray();
 
     if (dbSubs.length > 0) {
-      subs = dbSubs;
+      subs = dbSubs.map(s => ({
+        ...s,
+        partnerName: s.partnerName || s.userName || s.name || s.workerName || s.userEmail || 'Partner',
+        workerName: s.workerName || s.partnerName || s.userName || s.name || s.userEmail || 'Partner',
+        name: s.userName || s.partnerName || s.workerName || s.name || 'Partner',
+        userEmail: s.userEmail || s.email || '',
+        userPhone: s.userPhone || s.phone || '',
+        planName: s.planName || s.plan || 'Yearly Pro Partner Pass',
+        amount: s.amount || 1999,
+        paymentMethod: s.paymentMethod || 'UPI',
+        status: s.status || 'Active',
+        startDate: s.startDate || s.createdAt || new Date().toISOString(),
+        endDate: s.endDate || s.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString()
+      }));
     } else {
-      // Subscriptions are embedded on User documents.
-      // Only return users who ACTUALLY have an active subscription.
+      // Subscriptions embedded on User documents
       const activeSubscribers = await db.collection('users').find({
-        'subscription.isActive': true
+        $or: [
+          { 'subscription.isActive': true },
+          { 'subscription.active': true },
+          { 'subscription.status': 'active' }
+        ]
       }).toArray();
 
       const planLabels = {
         monthly: 'Monthly Plan (₹499)',
         quarterly: 'Quarterly Plan (₹999)',
-        yearly: 'Annual Plan (₹1999)',
+        yearly: 'Yearly Pro Partner Pass (₹1,999)',
       };
 
       subs = activeSubscribers.map((user) => ({
         _id: user._id,
-        partnerName: user.name,
-        planName: planLabels[user.subscription?.plan] || user.subscription?.plan || 'Monthly Plan',
-        amount: user.subscription?.plan === 'monthly' ? 499
-          : user.subscription?.plan === 'quarterly' ? 999
-            : user.subscription?.plan === 'yearly' ? 1999
-              : 499,
+        partnerName: user.name || user.email || 'Partner',
+        workerName: user.name || user.email || 'Partner',
+        name: user.name || user.email || 'Partner',
+        userEmail: user.email || '',
+        userPhone: user.phone || '',
+        planName: user.subscription?.planName || planLabels[user.subscription?.plan] || user.subscription?.plan || 'Yearly Pro Partner Pass',
+        amount: user.subscription?.amount || 1999,
         paymentMethod: user.subscription?.paymentMethod || 'UPI',
+        transactionId: user.subscription?.transactionId || '',
         status: user.subscription?.refundStatus === 'refunded' ? 'Refunded'
           : user.subscription?.refundStatus === 'pending' ? 'Refund Pending'
-            : 'Success',
-        startDate: user.subscription?.startDate,
-        endDate: user.subscription?.endDate,
+            : 'Active',
+        startDate: user.subscription?.startDate || user.createdAt,
+        endDate: user.subscription?.endDate || user.subscription?.expiryDate,
         date: user.subscription?.startDate || user.createdAt || new Date().toISOString()
       }));
     }
@@ -1418,6 +1436,8 @@ app.get('/api/subscriptions', async (req, res) => {
       const searchLower = search.toLowerCase();
       subs = subs.filter(s =>
         s.partnerName?.toLowerCase().includes(searchLower) ||
+        s.userEmail?.toLowerCase().includes(searchLower) ||
+        s.userPhone?.includes(searchLower) ||
         s.planName?.toLowerCase().includes(searchLower)
       );
     }

@@ -75,6 +75,8 @@ export default function SubscriptionTab() {
     }
   };
 
+  const currentWorkerId = user?.id || user?._id || user?.email;
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -82,16 +84,16 @@ export default function SubscriptionTab() {
       setLoading(false);
     };
     init();
-  }, [user?.id, token]);
+  }, [currentWorkerId, token]);
 
   useEffect(() => {
-    if (!user?.id || !token) return;
+    if (!currentWorkerId || !token) return;
     const socket = io(LOCAL_API_URL.replace('/api', ''), {
       transports: ['websocket', 'polling'],
     });
 
     socket.on('connect', () => {
-      socket.emit('join_user', user.id);
+      socket.emit('join_user', currentWorkerId);
     });
 
     socket.on('subscription_updated', (data: any) => {
@@ -106,7 +108,7 @@ export default function SubscriptionTab() {
     return () => {
       socket.disconnect();
     };
-  }, [user?.id, token]);
+  }, [currentWorkerId, token]);
 
   const handleBuySubscription = async () => {
     try {

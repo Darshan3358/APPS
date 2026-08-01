@@ -53,6 +53,9 @@ export default function SubscriptionManagement({
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectionNotes, setRejectionNotes] = useState('');
 
+  // Subscription Detail Modal State
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
+
   // Extract unique plans and payment methods dynamically
   const uniquePlans = Array.from(
     new Set(
@@ -188,8 +191,15 @@ export default function SubscriptionManagement({
                       <Ionicons name="person" size={20} color="#3B5BFF" />
                     </View>
                     <View style={styles.meta}>
-                      <Text style={styles.partnerName}>{item.partnerName || item.workerName || '—'}</Text>
-                      <Text style={styles.planName}>{item.planName || item.plan || 'Premium'} Plan</Text>
+                      <Text style={styles.partnerName}>
+                        {item.partnerName || item.workerName || item.userName || item.name || item.userEmail || 'Partner Account'}
+                      </Text>
+                      {(item.userEmail || item.workerEmail || item.userPhone) ? (
+                        <Text style={{ fontSize: 12, color: '#4B5563', fontWeight: '500', marginTop: 1 }}>
+                          {item.userEmail || item.workerEmail || ''} {item.userPhone ? `• 📞 ${item.userPhone}` : ''}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.planName}>{item.planName || item.plan || 'Yearly Pro Partner Pass'}</Text>
                     </View>
                     <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
                       <Text style={[styles.statusBadgeText, getStatusStyle(item.status)]}>
@@ -218,9 +228,27 @@ export default function SubscriptionManagement({
                     </View>
                   </View>
 
-                  {/* Actions */}
-                  {isRequest ? (
-                    <View style={styles.actionsRow}>
+                  {/* Actions & Detail Button */}
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: '#EFF6FF', borderColor: '#3B5BFF', borderWidth: 1, flex: 1 }]}
+                      onPress={() => setSelectedDetailItem(item)}
+                    >
+                      <Text style={{ color: '#3B5BFF', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>📋 View Details</Text>
+                    </TouchableOpacity>
+
+                    {!isRequest && item.status !== 'Refunded' && item.status !== 'refunded' && (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.refundBtn, { flex: 1 }]}
+                        onPress={() => onRefundSubscription(item._id)}
+                      >
+                        <Text style={styles.btnTextDark}>Issue Refund</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {isRequest && (
+                    <View style={[styles.actionsRow, { marginTop: 8 }]}>
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.approveBtn]}
                         onPress={() => onApproveRequest(item._id)}
@@ -234,23 +262,6 @@ export default function SubscriptionManagement({
                         <Text style={styles.btnTextRed}>Reject</Text>
                       </TouchableOpacity>
                     </View>
-                  ) : (
-                    <View style={styles.actionsRow}>
-                      <TouchableOpacity
-                        style={styles.manageBtn}
-                        onPress={() => {
-                          if (item.status === 'Active' || item.status === 'approved') {
-                            onRefundSubscription(item._id);
-                          } else {
-                            Alert.alert('Info', 'Subscription is already inactive.');
-                          }
-                        }}
-                      >
-                        <Text style={styles.manageBtnText}>
-                          {item.status === 'Active' || item.status === 'approved' ? 'Issue Refund' : 'Expired'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
                   )}
                 </View>
               );
@@ -260,6 +271,91 @@ export default function SubscriptionManagement({
       </ScrollView>
 
       {/* Filter Modal */}
+      {/* Subscription Details Modal */}
+      <Modal visible={!!selectedDetailItem} animationType="fade" transparent onRequestClose={() => setSelectedDetailItem(null)}>
+        <View style={modalStyles.overlay}>
+          <View style={[modalStyles.sheet, { maxHeight: '85%' }]}>
+            <View style={modalStyles.header}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="card-outline" size={24} color="#3B5BFF" />
+                <Text style={modalStyles.headerTitle}>Subscription Details</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedDetailItem(null)} style={modalStyles.closeBtn}>
+                <Ionicons name="close" size={22} color="#1E2A47" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedDetailItem && (
+              <ScrollView contentContainerStyle={{ padding: 20 }}>
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
+                    {selectedDetailItem.partnerName || selectedDetailItem.workerName || selectedDetailItem.userName || selectedDetailItem.name || 'Partner Account'}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#475569', marginBottom: 2 }}>
+                    📧 Email: {selectedDetailItem.userEmail || selectedDetailItem.workerEmail || selectedDetailItem.email || 'N/A'}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#475569' }}>
+                    📞 Phone: {selectedDetailItem.userPhone || selectedDetailItem.workerPhone || selectedDetailItem.phone || 'N/A'}
+                  </Text>
+                </View>
+
+                <View style={{ gap: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 14, color: '#64748B' }}>Plan Name</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>{selectedDetailItem.planName || selectedDetailItem.plan || 'Yearly Pro Partner Pass'}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 14, color: '#64748B' }}>Amount Paid</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#059669' }}>₹{selectedDetailItem.amount || 1999}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 14, color: '#64748B' }}>Payment Method</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>{selectedDetailItem.paymentMethod || 'UPI'}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 14, color: '#64748B' }}>Status</Text>
+                    <View style={[styles.statusBadge, getStatusStyle(selectedDetailItem.status)]}>
+                      <Text style={[styles.statusBadgeText, getStatusStyle(selectedDetailItem.status)]}>{getStatusText(selectedDetailItem.status)}</Text>
+                    </View>
+                  </View>
+
+                  {selectedDetailItem.transactionId ? (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                      <Text style={{ fontSize: 14, color: '#64748B' }}>Transaction ID</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#334155' }}>{selectedDetailItem.transactionId}</Text>
+                    </View>
+                  ) : null}
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 14, color: '#64748B' }}>Start Date</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#0F172A' }}>
+                      {selectedDetailItem.startDate ? new Date(selectedDetailItem.startDate).toLocaleString() : '—'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                    <Text style={{ fontSize: 14, color: '#64748B' }}>Expiry Date</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#0F172A' }}>
+                      {selectedDetailItem.endDate ? new Date(selectedDetailItem.endDate).toLocaleString() : '—'}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#1E2A47', borderRadius: 10, paddingVertical: 12, marginTop: 24, alignItems: 'center' }}
+                  onPress={() => setSelectedDetailItem(null)}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>Close Details</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={filterModalVisible} animationType="slide" transparent>
         <View style={modalStyles.overlay}>
           <View style={modalStyles.sheet}>
@@ -442,8 +538,10 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   approveBtn: { backgroundColor: '#16A34A' },
   rejectBtn: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FECACA' },
+  refundBtn: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' },
   btnTextWhite: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   btnTextRed: { color: '#EF4444', fontSize: 13, fontWeight: '700' },
+  btnTextDark: { color: '#374151', fontSize: 13, fontWeight: '700' },
   manageBtn: {
     flex: 1,
     height: 38,
