@@ -4776,8 +4776,30 @@ app.get('/api/worker/:uid/subscription', async (req, res) => {
 
     // Check in users first
     let user = await db.collection('users').findOne({
-      $or: [{ uid: uid }, { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }]
+      $or: [
+        { uid: uid },
+        { id: uid },
+        { email: uid },
+        { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
+      ]
     });
+
+    if (!user) {
+      // Check in workers collection
+      const workerDoc = await db.collection('workers').findOne({
+        $or: [
+          { uid: uid },
+          { id: uid },
+          { email: uid },
+          { _id: ObjectId.isValid(uid) ? new ObjectId(uid) : null }
+        ]
+      });
+      if (workerDoc && workerDoc.email) {
+        user = await db.collection('users').findOne({ email: workerDoc.email });
+      } else if (workerDoc) {
+        user = workerDoc;
+      }
+    }
 
     if (!user) {
       return res.status(404).json({ error: "Worker not found" });
@@ -4786,21 +4808,21 @@ app.get('/api/worker/:uid/subscription', async (req, res) => {
     const sub = user.subscription || { plan: 'none', status: 'inactive' };
 
     // Support both schema variations: status === 'active' or isActive === true
-    const isActive = sub.isActive === true || sub.status === 'active';
+    const isActive = sub.isActive === true || sub.status === 'active' || sub.active === true;
 
     let remainingDays = 0;
-    if (isActive && sub.endDate) {
+    if (isActive && (sub.endDate || sub.expiryDate)) {
       const now = new Date();
-      const end = new Date(sub.endDate);
+      const end = new Date(sub.endDate || sub.expiryDate);
       const diffTime = Math.max(0, end.getTime() - now.getTime());
       remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
 
     res.json({
-      plan: sub.plan || 'none',
+      plan: sub.planName || sub.plan || 'none',
       isActive: isActive,
       startDate: sub.startDate || null,
-      endDate: sub.endDate || null,
+      endDate: sub.endDate || sub.expiryDate || null,
       remainingDays: remainingDays
     });
   } catch (err) {
