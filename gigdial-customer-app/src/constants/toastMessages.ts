@@ -6,6 +6,7 @@ export const TOAST = {
     WELCOME: "✅ Welcome back! Login successful.",
     LOGIN_SUCCESS: "✅ Welcome back! Login successful.",
     LOGIN_FAILED: "❌ Invalid email or password.",
+    INVALID_CREDENTIALS: "❌ Invalid email or password.",
     EMAIL_REQUIRED: "⚠️ Please enter your email.",
     PASSWORD_REQUIRED: "⚠️ Please enter your password.",
     ACCOUNT_BLOCKED: "❌ Your account is blocked. Contact support.",

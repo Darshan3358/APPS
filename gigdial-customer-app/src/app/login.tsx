@@ -27,8 +27,9 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError('');
     if (!emailOrPhone || !password) {
-      setError('Please fill in all required fields.');
-      showToast(TOAST.AUTH.INVALID_CREDENTIALS, 'error');
+      const emptyMsg = '⚠️ Please enter both email/phone and password.';
+      setError(emptyMsg);
+      showToast(emptyMsg, 'error');
       return;
     }
 
@@ -39,7 +40,7 @@ export default function LoginScreen() {
         router.replace((redirect as any) || '/(tabs)/dashboard');
       }, 1000);
     } else {
-      const errMsg = res.error || TOAST.AUTH.INVALID_CREDENTIALS;
+      const errMsg = res.error || TOAST.AUTH.INVALID_CREDENTIALS || TOAST.AUTH.LOGIN_FAILED || '❌ Invalid email or password.';
       showToast(errMsg, 'error');
       setError(errMsg);
     }

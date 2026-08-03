@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -21,7 +21,12 @@ export default function Index() {
   if (isLoading || token) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={tokens.colors.primary} />
+        <Image
+          source={require('../../assets/images/splash-icon.png')}
+          style={{ width: 280, height: 280 }}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="small" color={tokens.colors.primary} style={{ marginTop: 24 }} />
       </View>
     );
   }

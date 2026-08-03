@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 
@@ -33,7 +33,12 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#0F2C59" />
+      <Image
+        source={require('../../assets/images/splash-icon.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <ActivityIndicator size="small" color="#0D9488" style={{ marginTop: 24 }} />
     </View>
   );
 }
@@ -44,5 +49,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+  },
+  logo: {
+    width: 280,
+    height: 280,
   },
 });

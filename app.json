@@ -19,7 +19,7 @@
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/android-icon-foreground.png"
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -34,7 +34,7 @@
         {
           "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 240,
+          "imageWidth": 200,
           "resizeMode": "contain"
         }
       ],

@@ -38,6 +38,8 @@ export interface BookingData {
   serviceName: string;
   price: number;
   status: string;
+  createdAt?: string;
+  date?: string;
 }
 
 export interface SubscriptionData {

@@ -117,7 +117,7 @@ export default function BookingsScreen({ bookings, onUpdateStatus }: BookingsScr
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: 'all' });
 
-  const dateFilteredBookings = filterByDateRange(bookings, (item) => (item as any).createdAt || item.date, dateFilter);
+  const dateFilteredBookings = filterByDateRange(bookings, (item) => item.createdAt || item.date, dateFilter);
 
   const filteredBookings = dateFilteredBookings.filter((b) => {
     const q = searchQuery.toLowerCase();
