@@ -2,7 +2,7 @@
   "expo": {
     "name": "GigDial Worker",
     "slug": "gigdial-worker-app",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gigdialworkerapp",
@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.darshanthanki.worker"
     },
     "android": {
+      "versionCode": 6,
       "package": "com.darshanthanki.worker",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {

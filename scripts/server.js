@@ -593,8 +593,11 @@ async function sendNotification(notificationData) {
   }
 }
 
+let isConnecting = false;
 // Connect to MongoDB
 async function connectDB() {
+  if (db || isConnecting) return;
+  isConnecting = true;
   try {
     client = new MongoClient(MONGO_URI);
     await client.connect();
@@ -695,6 +698,12 @@ async function connectDB() {
     await syncExistingReviews();
   } catch (err) {
     console.error("Failed to connect to MongoDB", err);
+    setTimeout(() => {
+      isConnecting = false;
+      connectDB();
+    }, 5000);
+  } finally {
+    isConnecting = false;
   }
 }
 
@@ -751,12 +760,22 @@ async function syncExistingReviews() {
 
 connectDB();
 
-// Middleware to ensure DB connection
-app.use((req, res, next) => {
-  if (!db) {
-    return res.status(503).json({ error: "Database not connected yet. Please try again." });
+// Middleware to ensure DB connection (with retry/waiting mechanism)
+app.use(async (req, res, next) => {
+  if (db) return next();
+
+  // Try triggering connectDB if not connected
+  connectDB();
+
+  // Wait up to 5 seconds (10 retries * 500ms) for DB connection to establish
+  for (let i = 0; i < 10; i++) {
+    if (db) return next();
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
-  next();
+
+  if (db) return next();
+
+  return res.status(503).json({ error: "Database service is taking longer than expected to connect. Please try again." });
 });
 
 // Helper for search queries

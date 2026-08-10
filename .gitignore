@@ -44,6 +44,7 @@ example
 
 # builds and archives
 *.apk
+*.aab
 *.tar.gz
 gigdial-customer-app/build-*
 gigdial-worker-app/build-*

@@ -2,7 +2,7 @@
   "expo": {
     "name": "GigDial Customer",
     "slug": "dmt",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gigdialcustomerapp",
@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "versionCode": 3,
       "package": "com.darshanthanki.customer",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {

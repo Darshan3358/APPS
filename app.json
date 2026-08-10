@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "versionCode": 2,
       "package": "com.zarwebcoders.gigdial.admin",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
